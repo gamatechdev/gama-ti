@@ -1,0 +1,5 @@
+{
+  "name": "IT Service Desk",
+  "description": "Desktop-first real-time IT ticket management system connecting to Supabase.",
+  "requestFramePermissions": []
+}
