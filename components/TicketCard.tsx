@@ -1,13 +1,14 @@
 import React from 'react';
 import { Chamado } from '../types';
-import { Clock, User, CheckCircle2 } from 'lucide-react';
+import { Clock, User, CheckCircle2, MessageSquare } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import ptBR from 'date-fns/locale/pt-BR';
 
 interface TicketCardProps {
   ticket: Chamado;
   onAccept: (id: number) => void;
   onFinalize: (id: number) => void;
+  onClick: (ticket: Chamado) => void;
   currentUser: string;
   isProcessing: boolean;
 }
@@ -16,6 +17,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({
   ticket, 
   onAccept, 
   onFinalize,
+  onClick,
   currentUser, 
   isProcessing 
 }) => {
@@ -24,16 +26,23 @@ export const TicketCard: React.FC<TicketCardProps> = ({
   const isDone = ticket.status === 'Concluído';
 
   return (
-    <div className={`p-4 mb-3 rounded-lg border transition-all duration-200 ${
+    <div 
+      onClick={() => onClick(ticket)}
+      className={`p-4 mb-3 rounded-lg border transition-all duration-200 cursor-pointer group relative ${
       isDone 
         ? 'bg-slate-800/40 border-slate-800 opacity-60 hover:opacity-100' 
-        : 'bg-slate-800 border-slate-700 hover:border-slate-600 shadow-sm hover:shadow-md'
+        : 'bg-slate-800 border-slate-700 hover:border-indigo-500/50 hover:shadow-md hover:shadow-indigo-500/10'
     }`}>
-      <div className="flex justify-between items-start mb-2">
+      {/* Hover hint */}
+      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <MessageSquare className="w-4 h-4 text-indigo-400" />
+      </div>
+
+      <div className="flex justify-between items-start mb-2 pr-6">
         <h3 className={`font-semibold text-sm md:text-base line-clamp-2 ${isDone ? 'text-slate-400 line-through' : 'text-slate-100'}`}>
           {ticket.titulo || 'Sem título'}
         </h3>
-        <span className={`px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider rounded-full ${
+        <span className={`px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider rounded-full shrink-0 ${
           ticket.status === 'pendente' ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20' :
           ticket.status === 'Em andamento' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' :
           'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
@@ -51,7 +60,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({
           <Clock className="w-3 h-3" />
           <span>
             {ticket.created_at 
-              ? formatDistanceToNow(new Date(ticket.created_at), { addSuffix: true, locale: ptBR })
+              ? formatDistanceToNow(new Date(ticket.created_at), { addSuffix: true, locale: ptBR } as any)
               : 'Data desconhecida'}
           </span>
         </div>
@@ -79,7 +88,10 @@ export const TicketCard: React.FC<TicketCardProps> = ({
 
             {isMine && !isDone && (
               <button
-                onClick={() => onFinalize(ticket.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onFinalize(ticket.id);
+                }}
                 disabled={isProcessing}
                 className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white py-2 px-3 rounded-md text-xs font-semibold transition-all hover:shadow-lg hover:shadow-emerald-500/20 active:scale-[0.98]"
               >
@@ -90,7 +102,10 @@ export const TicketCard: React.FC<TicketCardProps> = ({
           </div>
         ) : (
           <button
-            onClick={() => onAccept(ticket.id)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onAccept(ticket.id);
+            }}
             disabled={isProcessing}
             className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-900 disabled:text-indigo-400 text-white py-2 px-3 rounded-md text-xs font-semibold transition-all hover:shadow-lg hover:shadow-indigo-500/20 active:scale-[0.98]"
           >
