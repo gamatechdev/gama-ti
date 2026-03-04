@@ -39,7 +39,6 @@ export const Login: React.FC = () => {
             <img src="/gama.png" alt="Gama T.I Logo" className="w-16 h-16 object-contain" />
           </div>
           <h1 className="text-2xl font-bold text-white">Gama T.I</h1>
-          <p className="text-slate-400 text-sm mt-2">Acesse com suas credenciais</p>
         </div>
 
         {error && (
@@ -52,7 +51,7 @@ export const Login: React.FC = () => {
         <form onSubmit={handleLogin} className="space-y-6">
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-2">
-              Email Corporativo
+              E-mail
             </label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
