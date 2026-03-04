@@ -35,10 +35,10 @@ export const Login: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center bg-slate-950 p-4">
       <div className="bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-2xl w-full max-w-md">
         <div className="flex flex-col items-center mb-8">
-          <div className="bg-indigo-500/10 p-4 rounded-full mb-4">
-            <Lock className="w-12 h-12 text-indigo-400" />
+          <div className="bg-white/5 p-4 rounded-2xl mb-4 border border-white/10">
+            <img src="/gama.png" alt="Gama T.I Logo" className="w-16 h-16 object-contain" />
           </div>
-          <h1 className="text-2xl font-bold text-white">Service Desk Login</h1>
+          <h1 className="text-2xl font-bold text-white">Gama T.I</h1>
           <p className="text-slate-400 text-sm mt-2">Acesse com suas credenciais</p>
         </div>
 

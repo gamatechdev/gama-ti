@@ -36,38 +36,55 @@ const App: React.FC = () => {
 
   const audioEnabled = useRef(false);
 
+  // Solicita permissão para notificações desktop
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission().catch(console.warn);
+    }
+  }, []);
+
   // --- Auth & Profile Logic ---
   useEffect(() => {
     let mounted = true;
+    let authListenerUnsubscribe: (() => void) | null = null;
 
-    // Safety timeout: garante que o loading some mesmo se o Supabase demorar demais
+    console.log("[AUTH DEBUG] Iniciando verificação de sessão...", new Date().toISOString());
+
+    // Safety timeout: super agressivo (3s) para matar o loading caso o supabase congele no LocalStorage
     const safetyTimeout = setTimeout(() => {
-      if (mounted) setAuthLoading(false);
-    }, 5000);
-
-    // Único listener para todo o ciclo de auth:
-    // - INITIAL_SESSION: dispara ao carregar a página (com ou sem sessão existente)
-    // - SIGNED_IN: dispara ao fazer login
-    // - SIGNED_OUT: dispara ao fazer logout
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // Ativar a tela preta de "Carregando sistema..." imediatamente caso já não esteja
-      if (mounted && !authLoading) {
-        setAuthLoading(true);
+      if (mounted && authLoading) {
+        console.error("[AUTH DEBUG] TIMEOUT: Supabase não respondeu a tempo. Forçando loading=false.");
+        setAuthLoading(false);
       }
+    }, 3000);
 
-      if (session?.user) {
-        // Usuário autenticado: busca o perfil no banco de dados
-        try {
+    const checkInitialSession = async () => {
+      try {
+        console.log("[AUTH DEBUG] Executando getSession()...");
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          console.error("[AUTH DEBUG] Erro imediato no getSession():", sessionError);
+          throw sessionError;
+        }
+
+        if (session?.user) {
+          console.log("[AUTH DEBUG] Sessão local detectada. O Email é:", session.user.email);
+          console.log("[AUTH DEBUG] Validando o perfil no banco de dados...");
+
           const { data, error } = await supabase
             .from('users')
             .select('username, img_url')
             .eq('user_id', session.user.id)
             .maybeSingle();
 
-          if (error && error.code !== 'PGRST116') throw error; // Ignora apenas o erro de "nenhuma linha" se o usuário existir mas não tiver perfil
+          if (error && error.code !== 'PGRST116') {
+            console.error("[AUTH DEBUG] Erro fatal buscando perfil do DB:", error);
+            throw error;
+          }
 
           if (mounted) {
-            // Define o usuário com os dados do perfil ou fallback pelo email
+            console.log("[AUTH DEBUG] Sessão completamente reativada. Carregando...");
             setUser({
               id: session.user.id,
               name: data?.username || session.user.email?.split('@')[0] || 'Técnico',
@@ -76,36 +93,58 @@ const App: React.FC = () => {
             });
             audioEnabled.current = true;
           }
-        } catch (err) {
-          console.error("Erro fatal ao carregar sessão ou perfil:", err);
-          // Se houver qualquer erro impeditivo de sessão corrompida, limpa os cookies e força logout imediatamente
-          await supabase.auth.signOut();
-          localStorage.clear();
-          sessionStorage.clear();
+        } else {
+          console.log("[AUTH DEBUG] Sem sessão local. Redirecionar para o Login.");
           if (mounted) {
             setUser(null);
             setTickets([]);
           }
         }
-      } else {
-        // Usuário deslogado ou token local invalido: limpa todos os estados
+      } catch (err) {
+        console.error("[AUTH DEBUG] Corrupção extrema detectada 🧹. Limpando base de dados do navegador via localStorage.", err);
+        // Wipe agressivo
+        await supabase.auth.signOut().catch(() => { });
+        localStorage.clear();
+        sessionStorage.clear();
         if (mounted) {
           setUser(null);
           setTickets([]);
         }
+      } finally {
+        if (mounted) {
+          console.log("[AUTH DEBUG] Processo encerrado. Removendo flag de carregamento.");
+          setAuthLoading(false);
+          clearTimeout(safetyTimeout);
+        }
       }
+    };
 
-      // Sempre remove o estado de loading ao finalizar, independente do resultado
-      if (mounted) {
-        clearTimeout(safetyTimeout);
+    // 1. Injeta validação explícita
+    checkInitialSession();
+
+    // 2. Anexa listener apenas para gerenciar fluxos em tempo real da página ativa.
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log(`[AUTH DEBUG] onAuthStateChange Evento: ${event}`, session?.user?.email);
+      if (!mounted) return;
+
+      if (event === 'SIGNED_IN' && session?.user) {
+        console.log("[AUTH DEBUG] Evento de SIGNED_IN capturado. Re-validando rotas de profile.");
+        setAuthLoading(true);
+        checkInitialSession();
+      } else if (event === 'SIGNED_OUT') {
+        console.log("[AUTH DEBUG] Evento de SIGNED_OUT capturado. Esvaziando a UI.");
+        setUser(null);
+        setTickets([]);
         setAuthLoading(false);
       }
     });
 
+    authListenerUnsubscribe = authListener.subscription.unsubscribe;
+
     return () => {
       mounted = false;
       clearTimeout(safetyTimeout);
-      authListener.subscription.unsubscribe();
+      if (authListenerUnsubscribe) authListenerUnsubscribe();
     };
   }, []);
 
@@ -145,6 +184,19 @@ const App: React.FC = () => {
 
           if (audioEnabled.current) {
             playNotificationSound();
+
+            // Disparar notificação desktop
+            if ("Notification" in window && Notification.permission === "granted") {
+              const notification = new Notification(`Novo chamado: #${insertedTicket.id}`, {
+                body: `${insertedTicket.solicitante || 'Usuário'}: ${insertedTicket.titulo || 'Sem título'}`,
+                icon: '/vite.svg'
+              });
+
+              notification.onclick = () => {
+                window.focus();
+                setDetailsTicket(insertedTicket);
+              };
+            }
           }
         }
       )
@@ -404,11 +456,11 @@ const App: React.FC = () => {
       {/* Header */}
       <header className="h-16 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-6 shrink-0 z-10 relative">
         <div className="flex items-center gap-3">
-          <div className="bg-indigo-600 p-2 rounded-lg">
-            <LayoutDashboard className="w-5 h-5 text-white" />
+          <div className="bg-white/10 p-1.5 rounded-lg overflow-hidden">
+            <img src="/gama.png" alt="Gama T.I Logo" className="w-7 h-7 object-contain" />
           </div>
           <h1 className="font-bold text-lg text-slate-100 tracking-wide">
-            IT SERVICE <span className="text-indigo-400">DESK</span>
+            Gama <span className="text-indigo-400">T.I</span>
           </h1>
         </div>
 
