@@ -46,105 +46,95 @@ const App: React.FC = () => {
   // --- Auth & Profile Logic ---
   useEffect(() => {
     let mounted = true;
-    let authListenerUnsubscribe: (() => void) | null = null;
 
-    console.log("[AUTH DEBUG] Iniciando verificação de sessão...", new Date().toISOString());
-
-    // Safety timeout: super agressivo (3s) para matar o loading caso o supabase congele no LocalStorage
-    const safetyTimeout = setTimeout(() => {
-      if (mounted && authLoading) {
-        console.error("[AUTH DEBUG] TIMEOUT: Supabase não respondeu a tempo. Forçando loading=false.");
-        setAuthLoading(false);
+    // Função separada que carrega o usuário de forma OTIMISTA (sem travar a tela)
+    const setupUserOptimistically = async (session: any) => {
+      // 1. CARREGAMENTO IMEDIATO: Libera o sistema usando os dados básicos da sessão
+      if (mounted) {
+        setUser({
+          id: session.user.id,
+          name: session.user.user_metadata?.username || session.user.email?.split('@')[0] || 'Técnico',
+          email: session.user.email,
+          // O avatar fica undefined temporariamente até o DB responder
+        });
+        setAuthLoading(false); // <- ISSO AQUI ACABA COM A DEMORA! O sistema abre na hora.
+        audioEnabled.current = true;
       }
-    }, 3000);
 
-    const checkInitialSession = async () => {
+      // 2. Busca a foto e o nome de usuário em segundo plano (não bloqueia a renderização)
       try {
-        console.log("[AUTH DEBUG] Executando getSession()...");
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        const { data, error } = await supabase
+          .from('users')
+          .select('username, img_url')
+          .eq('user_id', session.user.id)
+          .maybeSingle();
 
-        if (sessionError) {
-          console.error("[AUTH DEBUG] Erro imediato no getSession():", sessionError);
-          throw sessionError;
+        // 3. Quando o DB responder, atualiza o perfil silenciosamente
+        if (data && mounted) {
+          setUser(prev => prev ? {
+            ...prev,
+            name: data.username || prev.name, // Substitui pelo nome real se existir
+            avatar: data.img_url              // Adiciona a foto de perfil
+          } : null);
         }
+      } catch (err) {
+        console.warn("[AUTH DEBUG] Erro não-fatal ao buscar detalhes do perfil:", err);
+      }
+    };
+
+    const initializeAuth = async () => {
+      try {
+        console.log("[AUTH DEBUG] Executando getSession inicial...");
+        const { data: { session }, error } = await supabase.auth.getSession();
+
+        if (error) throw error;
 
         if (session?.user) {
-          console.log("[AUTH DEBUG] Sessão local detectada. O Email é:", session.user.email);
-          console.log("[AUTH DEBUG] Validando o perfil no banco de dados...");
-
-          const { data, error } = await supabase
-            .from('users')
-            .select('username, img_url')
-            .eq('user_id', session.user.id)
-            .maybeSingle();
-
-          if (error && error.code !== 'PGRST116') {
-            console.error("[AUTH DEBUG] Erro fatal buscando perfil do DB:", error);
-            throw error;
-          }
-
-          if (mounted) {
-            console.log("[AUTH DEBUG] Sessão completamente reativada. Carregando...");
-            setUser({
-              id: session.user.id,
-              name: data?.username || session.user.email?.split('@')[0] || 'Técnico',
-              avatar: data?.img_url,
-              email: session.user.email
-            });
-            audioEnabled.current = true;
-          }
+          await setupUserOptimistically(session);
         } else {
-          console.log("[AUTH DEBUG] Sem sessão local. Redirecionar para o Login.");
           if (mounted) {
             setUser(null);
-            setTickets([]);
+            setAuthLoading(false);
           }
         }
       } catch (err) {
-        console.error("[AUTH DEBUG] Corrupção extrema detectada 🧹. Limpando base de dados do navegador via localStorage.", err);
-        // Wipe agressivo
-        await supabase.auth.signOut().catch(() => { });
+        console.error("[AUTH DEBUG] Corrupção de sessão. Iniciando limpeza profunda...", err);
+        // O "Wipe Agressivo" que destrói os cookies também (resolve o bug de travar no login)
         localStorage.clear();
         sessionStorage.clear();
+        document.cookie.split(";").forEach((c) => {
+          document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+        });
+
+        await supabase.auth.signOut().catch(() => { });
+
         if (mounted) {
           setUser(null);
-          setTickets([]);
-        }
-      } finally {
-        if (mounted) {
-          console.log("[AUTH DEBUG] Processo encerrado. Removendo flag de carregamento.");
           setAuthLoading(false);
-          clearTimeout(safetyTimeout);
         }
       }
     };
 
-    // 1. Injeta validação explícita
-    checkInitialSession();
+    initializeAuth();
 
-    // 2. Anexa listener apenas para gerenciar fluxos em tempo real da página ativa.
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log(`[AUTH DEBUG] onAuthStateChange Evento: ${event}`, session?.user?.email);
+    // Listener de tempo real mais inteligente
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log(`[AUTH DEBUG] onAuthStateChange Evento: ${event}`);
       if (!mounted) return;
 
       if (event === 'SIGNED_IN' && session?.user) {
-        console.log("[AUTH DEBUG] Evento de SIGNED_IN capturado. Re-validando rotas de profile.");
-        setAuthLoading(true);
-        checkInitialSession();
+        // Usa a sessão que o próprio evento entregou em vez de buscar de novo!
+        setupUserOptimistically(session);
       } else if (event === 'SIGNED_OUT') {
-        console.log("[AUTH DEBUG] Evento de SIGNED_OUT capturado. Esvaziando a UI.");
         setUser(null);
         setTickets([]);
         setAuthLoading(false);
       }
     });
 
-    authListenerUnsubscribe = authListener.subscription.unsubscribe;
-
     return () => {
       mounted = false;
-      clearTimeout(safetyTimeout);
-      if (authListenerUnsubscribe) authListenerUnsubscribe();
+      authListener.subscription.unsubscribe();
     };
   }, []);
 
