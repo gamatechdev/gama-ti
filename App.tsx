@@ -486,9 +486,6 @@ const App: React.FC = () => {
               <div className="p-6 bg-slate-900/30 border-b border-slate-800 flex flex-col md:flex-row gap-4 items-end">
                 {/* Campo de Pesquisa */}
                 <div className="flex-1 w-full relative group">
-                  <label htmlFor="searchDesc" className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-2 block">
-                    Insira a descrição do chamado
-                  </label>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-indigo-400 transition-colors" />
                     <input
@@ -713,8 +710,8 @@ const App: React.FC = () => {
                       <th className="px-6 py-4">Título</th>
                       <th className="px-6 py-4">Solicitante</th>
                       <th className="px-6 py-4">Responsável</th>
-                      <th className="px-6 py-4">Solicitado em</th>
-                      <th className="px-6 py-4">Resolvido em</th>
+                      <th className="px-6 py-4 whitespace-nowrap">Solicitado em</th>
+                      <th className="px-6 py-4 whitespace-nowrap">Resolvido em</th>
                       <th className="px-6 py-4">Status</th>
                       <th className="px-6 py-4">Ação</th>
                     </tr>
@@ -747,14 +744,14 @@ const App: React.FC = () => {
                               </div>
                             ) : '-'}
                           </td>
-                          <td className="px-6 py-4 text-slate-500">
+                          <td className="px-6 py-4 text-slate-500 whitespace-nowrap">
                             {t.created_at ? format(new Date(t.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR }) : '-'}
                           </td>
-                          <td className="px-6 py-4 text-slate-500">
+                          <td className="px-6 py-4 text-slate-500 whitespace-nowrap">
                             {t.conclued_at ? format(new Date(t.conclued_at), "dd/MM/yyyy HH:mm", { locale: ptBR }) : '-'}
                           </td>
                           <td className="px-6 py-4">
-                            <span className={`px-2 py-1 rounded-full text-[10px] uppercase font-bold border ${t.status === 'Concluído' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
+                            <span className={`px-2 py-1 rounded-full text-[10px] uppercase font-bold border whitespace-nowrap inline-flex items-center justify-center ${t.status === 'Concluído' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
                               t.status === 'Em andamento' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' :
                                 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
                               }`}>

@@ -37,7 +37,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({
         }`}>
 
       {/* Badge de Status - Canto Superior Direito */}
-      <span className={`absolute top-3 right-3 px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider rounded-full z-10 ${ticket.status === 'pendente' ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20' :
+      <span className={`absolute top-3 right-3 px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider rounded-full z-10 whitespace-nowrap inline-flex items-center justify-center ${ticket.status === 'pendente' ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20' :
         ticket.status === 'Em andamento' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' :
           'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
         }`}>
