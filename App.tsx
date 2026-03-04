@@ -58,11 +58,13 @@ const App: React.FC = () => {
       if (session?.user) {
         // Usuário autenticado: busca o perfil no banco de dados
         try {
-          const { data } = await supabase
+          const { data, error } = await supabase
             .from('users')
             .select('username, img_url')
             .eq('user_id', session.user.id)
             .maybeSingle();
+
+          if (error && error.code !== 'PGRST116') throw error; // Ignora apenas o erro de "nenhuma linha" se o usuário existir mas não tiver perfil
 
           if (mounted) {
             // Define o usuário com os dados do perfil ou fallback pelo email
@@ -75,17 +77,18 @@ const App: React.FC = () => {
             audioEnabled.current = true;
           }
         } catch (err) {
-          // Em caso de erro na busca do perfil, usa o email como fallback
+          console.error("Erro fatal ao carregar sessão ou perfil:", err);
+          // Se houver qualquer erro impeditivo de sessão corrompida, limpa os cookies e força logout imediatamente
+          await supabase.auth.signOut();
+          localStorage.clear();
+          sessionStorage.clear();
           if (mounted) {
-            setUser({
-              id: session.user.id,
-              name: session.user.email?.split('@')[0] || 'Técnico',
-              email: session.user.email
-            });
+            setUser(null);
+            setTickets([]);
           }
         }
       } else {
-        // Usuário deslogado: limpa todos os estados
+        // Usuário deslogado ou token local invalido: limpa todos os estados
         if (mounted) {
           setUser(null);
           setTickets([]);
@@ -172,7 +175,11 @@ const App: React.FC = () => {
   }, [user?.id]);
 
   // --- Actions ---
-  const handleLogout = () => supabase.auth.signOut();
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    localStorage.clear(); // Wipe all state aggressively to kill ghost sessions
+    sessionStorage.clear();
+  };
 
   // Helper to ensure session is valid before performing actions
   const checkSession = async () => {
@@ -224,7 +231,7 @@ const App: React.FC = () => {
       alert("Erro ao aceitar chamado. Verifique sua conexão.");
 
       if (err.message?.includes("Sessão expirada") || err.message?.includes("JWT")) {
-        handleLogout();
+        handleLogout(); // O handleLogout modificado limpa cache
       }
     } finally {
       setProcessingId(null);

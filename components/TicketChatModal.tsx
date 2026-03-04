@@ -3,7 +3,7 @@ import { supabase } from '../supabaseClient';
 import { Chamado, ChatMessage, UserSession } from '../types';
 import { X, Send, MessageSquare, Loader2, User, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
-import ptBR from 'date-fns/locale/pt-BR';
+import { ptBR } from 'date-fns/locale/pt-BR';
 
 interface TicketChatModalProps {
   ticket: Chamado;
@@ -28,6 +28,11 @@ export const TicketChatModal: React.FC<TicketChatModalProps> = ({ ticket, curren
     // 1. Fetch initial history
     const fetchMessages = async () => {
       setLoading(true);
+
+      const timeout = setTimeout(() => {
+        if (loading) setLoading(false);
+      }, 5000);
+
       const { data, error } = await supabase
         .from('chat_chamados')
         .select('*')
@@ -39,7 +44,9 @@ export const TicketChatModal: React.FC<TicketChatModalProps> = ({ ticket, curren
       } else {
         setMessages(data || []);
       }
+
       setLoading(false);
+      clearTimeout(timeout);
       scrollToBottom();
     };
 
@@ -58,29 +65,13 @@ export const TicketChatModal: React.FC<TicketChatModalProps> = ({ ticket, curren
         },
         (payload) => {
           const newMsg = payload.new as ChatMessage;
-          
+
           setMessages((prev) => {
-            // A. Strict deduplication by ID
+            // Se mensagem já existe, ignora
             if (prev.some(m => m.id === newMsg.id)) return prev;
-
-            // B. Soft deduplication for Optimistic Updates
-            // If we have a message in 'SENDING' status that looks just like this incoming one,
-            // we assume the incoming one IS the sent one, and we replace it to get the real ID.
-            const pendingIndex = prev.findIndex(m => 
-               m.status === 'SENDING' && 
-               m.text_msg === newMsg.text_msg && 
-               m.sent_by === newMsg.sent_by
-            );
-
-            if (pendingIndex !== -1) {
-              const updated = [...prev];
-              updated[pendingIndex] = newMsg; // Replace temp with real
-              return updated;
-            }
-
             return [...prev, newMsg];
           });
-          
+
           scrollToBottom();
         }
       )
@@ -100,7 +91,7 @@ export const TicketChatModal: React.FC<TicketChatModalProps> = ({ ticket, curren
     setSending(true);
 
     // Optimistic Update: Create a temporary message to show immediately
-    const tempId = Date.now(); 
+    const tempId = Date.now();
     const optimisticMsg: ChatMessage = {
       id: tempId, // Temporary ID
       chamado_id: ticket.id,
@@ -120,8 +111,7 @@ export const TicketChatModal: React.FC<TicketChatModalProps> = ({ ticket, curren
         .insert({
           chamado_id: ticket.id,
           text_msg: msgText,
-          sent_by: currentUser.id,
-          status: 'SENT'
+          sent_by: currentUser.id
         })
         .select()
         .single();
@@ -130,7 +120,7 @@ export const TicketChatModal: React.FC<TicketChatModalProps> = ({ ticket, curren
 
       // Update the optimistic message with the real ID from DB response
       // Only necessary if Realtime didn't already update it (race condition handled)
-      setMessages((prev) => 
+      setMessages((prev) =>
         prev.map(msg => {
           if (msg.id === tempId) return data;
           return msg;
@@ -140,7 +130,7 @@ export const TicketChatModal: React.FC<TicketChatModalProps> = ({ ticket, curren
     } catch (err) {
       console.error('Error sending message:', err);
       // Mark as error in UI
-      setMessages((prev) => 
+      setMessages((prev) =>
         prev.map(msg => msg.id === tempId ? { ...msg, status: 'ERROR' } : msg)
       );
     } finally {
@@ -151,7 +141,7 @@ export const TicketChatModal: React.FC<TicketChatModalProps> = ({ ticket, curren
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-2xl h-[600px] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-        
+
         {/* Header */}
         <div className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
@@ -186,17 +176,16 @@ export const TicketChatModal: React.FC<TicketChatModalProps> = ({ ticket, curren
             messages.map((msg) => {
               const isMe = msg.sent_by === currentUser.id;
               const isError = msg.status === 'ERROR';
-              
+
               return (
                 <div key={msg.id} className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'}`}>
                   <div className={`flex flex-col max-w-[75%] ${isMe ? 'items-end' : 'items-start'}`}>
-                    <div className={`px-4 py-3 rounded-2xl text-sm relative shadow-sm break-words ${
-                      isMe 
-                        ? 'bg-indigo-600 text-white rounded-tr-none' 
-                        : 'bg-slate-800 text-slate-200 border border-slate-700 rounded-tl-none'
-                    } ${isError ? 'bg-red-500/20 border-red-500' : ''}`}>
+                    <div className={`px-4 py-3 rounded-2xl text-sm relative shadow-sm break-words ${isMe
+                      ? 'bg-indigo-600 text-white rounded-tr-none'
+                      : 'bg-slate-800 text-slate-200 border border-slate-700 rounded-tl-none'
+                      } ${isError ? 'bg-red-500/20 border-red-500' : ''}`}>
                       {msg.text_msg}
-                      
+
                       {isError && (
                         <div className="absolute -right-6 top-1/2 -translate-y-1/2 text-red-500">
                           <AlertCircle className="w-4 h-4" />
@@ -220,21 +209,21 @@ export const TicketChatModal: React.FC<TicketChatModalProps> = ({ ticket, curren
         {/* Input Area */}
         <div className="p-4 bg-slate-800 border-t border-slate-700 shrink-0">
           <form onSubmit={handleSendMessage} className="flex gap-3">
-             <input
-                type="text"
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                placeholder="Digite sua mensagem..."
-                className="flex-1 bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all placeholder-slate-500"
-                disabled={sending}
-             />
-             <button
-                type="submit"
-                disabled={sending || !newMessage.trim()}
-                className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white p-3 rounded-xl transition-all shadow-lg shadow-indigo-500/20 flex items-center justify-center"
-             >
-                <Send className="w-5 h-5" />
-             </button>
+            <input
+              type="text"
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              placeholder="Digite sua mensagem..."
+              className="flex-1 bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all placeholder-slate-500"
+              disabled={sending}
+            />
+            <button
+              type="submit"
+              disabled={sending || !newMessage.trim()}
+              className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white p-3 rounded-xl transition-all shadow-lg shadow-indigo-500/20 flex items-center justify-center"
+            >
+              <Send className="w-5 h-5" />
+            </button>
           </form>
         </div>
       </div>
