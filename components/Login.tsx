@@ -20,14 +20,14 @@ export const Login: React.FC = () => {
       });
 
       if (error) {
+        setLoading(false); // Retira loading se o prórpio supabase der erro na hora
         throw error;
       }
-      // App.tsx listener will handle the state change
+      // Se tiver sucesso, DEIXA o loading=true, pois o App.tsx vai assumir o controle da tela
     } catch (err: any) {
       console.error('Login error:', err);
-      setError(err.message || 'Falha na autenticação');
-    } finally {
-      setLoading(false);
+      setError(err.message || 'Falha na autenticação. Verifique seu email e senha.');
+      setLoading(false); // Retira loading se cair no catch
     }
   };
 
@@ -67,7 +67,7 @@ export const Login: React.FC = () => {
               />
             </div>
           </div>
-          
+
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-slate-300 mb-2">
               Senha

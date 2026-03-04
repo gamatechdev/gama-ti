@@ -40,82 +40,61 @@ const App: React.FC = () => {
   useEffect(() => {
     let mounted = true;
 
-    // Safety timeout: If Supabase hangs, force loading to false after 3s
+    // Safety timeout: garante que o loading some mesmo se o Supabase demorar demais
     const safetyTimeout = setTimeout(() => {
-      if (mounted && authLoading) {
-        console.warn("Auth check timed out, forcing UI load");
-        setAuthLoading(false);
+      if (mounted) setAuthLoading(false);
+    }, 5000);
+
+    // Único listener para todo o ciclo de auth:
+    // - INITIAL_SESSION: dispara ao carregar a página (com ou sem sessão existente)
+    // - SIGNED_IN: dispara ao fazer login
+    // - SIGNED_OUT: dispara ao fazer logout
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // Ativar a tela preta de "Carregando sistema..." imediatamente caso já não esteja
+      if (mounted && !authLoading) {
+        setAuthLoading(true);
       }
-    }, 3000);
 
-    const fetchProfile = async (sessionUser: any) => {
-      try {
-        const { data, error } = await supabase
-          .from('users')
-          .select('username, img_url')
-          .eq('user_id', sessionUser.id)
-          .maybeSingle();
+      if (session?.user) {
+        // Usuário autenticado: busca o perfil no banco de dados
+        try {
+          const { data } = await supabase
+            .from('users')
+            .select('username, img_url')
+            .eq('user_id', session.user.id)
+            .maybeSingle();
 
-        if (error && error.code !== 'PGRST116') {
-          console.warn("Error fetching profile:", error);
-        }
-
-        return {
-          id: sessionUser.id,
-          name: data?.username || sessionUser.email?.split('@')[0] || 'Técnico',
-          avatar: data?.img_url,
-          email: sessionUser.email
-        };
-      } catch (err) {
-        console.error("Profile fetch exception:", err);
-        return {
-          id: sessionUser.id,
-          name: sessionUser.email?.split('@')[0] || 'Técnico',
-          email: sessionUser.email
-        };
-      }
-    };
-
-    const initAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user && mounted) {
-          const profile = await fetchProfile(session.user);
           if (mounted) {
-            setUser(profile);
+            // Define o usuário com os dados do perfil ou fallback pelo email
+            setUser({
+              id: session.user.id,
+              name: data?.username || session.user.email?.split('@')[0] || 'Técnico',
+              avatar: data?.img_url,
+              email: session.user.email
+            });
             audioEnabled.current = true;
           }
+        } catch (err) {
+          // Em caso de erro na busca do perfil, usa o email como fallback
+          if (mounted) {
+            setUser({
+              id: session.user.id,
+              name: session.user.email?.split('@')[0] || 'Técnico',
+              email: session.user.email
+            });
+          }
         }
-      } catch (e) {
-        console.error("Initialization error:", e);
-      } finally {
+      } else {
+        // Usuário deslogado: limpa todos os estados
         if (mounted) {
-          setAuthLoading(false);
-          clearTimeout(safetyTimeout);
+          setUser(null);
+          setTickets([]);
         }
       }
-    };
 
-    initAuth();
-
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return;
-
-      console.log(`[Auth] Event: ${event}`);
-
-      if (event === 'SIGNED_IN' && session?.user) {
-        const profile = await fetchProfile(session.user);
-        if (mounted) {
-          setUser(profile);
-          audioEnabled.current = true;
-          setAuthLoading(false);
-        }
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-        setTickets([]);
-        setAuthLoading(false);
-      } else if (event === 'TOKEN_REFRESHED') {
-        // Token refreshed successfully
+      // Sempre remove o estado de loading ao finalizar, independente do resultado
+      if (mounted) {
+        clearTimeout(safetyTimeout);
         setAuthLoading(false);
       }
     });
@@ -156,7 +135,6 @@ const App: React.FC = () => {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'chamados' },
         (payload) => {
-          console.log("New Ticket Inserted:", payload);
           const insertedTicket = payload.new as Chamado;
 
           setTickets((prev) => [insertedTicket, ...prev]);
@@ -171,14 +149,13 @@ const App: React.FC = () => {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'chamados' },
         (payload) => {
-          console.log("Ticket Updated:", payload);
           const updatedTicket = payload.new as Chamado;
 
           setTickets((prev) =>
             prev.map(t => t.id === updatedTicket.id ? updatedTicket : t)
           );
 
-          // Close modal if the ticket was taken by someone else or updated
+          // Fecha o modal se o chamado foi aceito por outra pessoa
           setNewTicket(current => {
             if (current && current.id === updatedTicket.id && updatedTicket.responsavel) {
               return null;
@@ -259,14 +236,15 @@ const App: React.FC = () => {
 
     // 1. Optimistic Update
     const previousTickets = [...tickets];
-    setTickets(prev => prev.map(t => t.id === id ? { ...t, status: 'Concluído' } : t));
+    const now = new Date().toISOString();
+    setTickets(prev => prev.map(t => t.id === id ? { ...t, status: 'Concluído', conclued_at: now } : t));
 
     try {
       // 2. Perform DB Update
       await checkSession();
       const { error } = await supabase
         .from('chamados')
-        .update({ status: 'Concluído' })
+        .update({ status: 'Concluído', conclued_at: now })
         .eq('id', id);
 
       if (error) throw error;
@@ -311,23 +289,36 @@ const App: React.FC = () => {
   }, [tickets]);
 
   // Busca imagens de perfil para todos os usuários únicos nos filtros
-  useEffect(() => {
-    const fetchUserImages = async () => {
-      const allNames = Array.from(new Set([...uniqueSolicitantes, ...uniqueResponsaveis]));
-      if (allNames.length === 0) return;
+  // Usa um ref para rastrear quais nomes já foram buscados e evitar re-buscas desnecessárias
+  const fetchedNamesRef = useRef<Set<string>>(new Set());
 
+  useEffect(() => {
+    // Obtém todos os nomes ainda não buscados
+    const allNames = Array.from(new Set([...uniqueSolicitantes, ...uniqueResponsaveis]));
+    const newNames = allNames.filter(n => !fetchedNamesRef.current.has(n));
+
+    // Só faz a requisição se houver nomes novos
+    if (newNames.length === 0) return;
+
+    const fetchUserImages = async () => {
       try {
         const { data, error } = await supabase
           .from('users')
           .select('username, img_url')
-          .in('username', allNames);
+          .in('username', newNames);
 
         if (!error && data) {
-          const map: Record<string, string> = {};
-          data.forEach(u => {
-            if (u.img_url) map[u.username] = u.img_url;
+          // Marca os nomes como já buscados
+          newNames.forEach(n => fetchedNamesRef.current.add(n));
+
+          // Atualiza o mapa de imagens apenas com os dados novos
+          setUserImgMap(prev => {
+            const updated = { ...prev };
+            data.forEach(u => {
+              if (u.img_url) updated[u.username] = u.img_url;
+            });
+            return updated;
           });
-          setUserImgMap(map);
         }
       } catch (err) {
         console.warn("Erro ao buscar imagens dos filtros:", err);
@@ -335,7 +326,8 @@ const App: React.FC = () => {
     };
 
     fetchUserImages();
-  }, [uniqueSolicitantes, uniqueResponsaveis]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uniqueSolicitantes.join(','), uniqueResponsaveis.join(',')]);
 
   // Filtra os chamados com base no termo de busca e filtros selecionados
   const filteredTickets = useMemo(() => {
@@ -721,7 +713,8 @@ const App: React.FC = () => {
                       <th className="px-6 py-4">Título</th>
                       <th className="px-6 py-4">Solicitante</th>
                       <th className="px-6 py-4">Responsável</th>
-                      <th className="px-6 py-4">Data</th>
+                      <th className="px-6 py-4">Solicitado em</th>
+                      <th className="px-6 py-4">Resolvido em</th>
                       <th className="px-6 py-4">Status</th>
                       <th className="px-6 py-4">Ação</th>
                     </tr>
@@ -756,6 +749,9 @@ const App: React.FC = () => {
                           </td>
                           <td className="px-6 py-4 text-slate-500">
                             {t.created_at ? format(new Date(t.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR }) : '-'}
+                          </td>
+                          <td className="px-6 py-4 text-slate-500">
+                            {t.conclued_at ? format(new Date(t.conclued_at), "dd/MM/yyyy HH:mm", { locale: ptBR }) : '-'}
                           </td>
                           <td className="px-6 py-4">
                             <span className={`px-2 py-1 rounded-full text-[10px] uppercase font-bold border ${t.status === 'Concluído' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :

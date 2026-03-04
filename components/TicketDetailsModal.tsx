@@ -108,14 +108,28 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({ ticket, 
                             </div>
                         </div>
 
-                        <div className="flex flex-col md:items-end">
-                            <span className="text-slate-500 text-xs font-semibold uppercase tracking-wider block mb-1">Data de Abertura</span>
-                            <div className="flex items-center gap-2 text-slate-300">
-                                <Calendar className="w-4 h-4 text-indigo-400" />
-                                <span className="text-sm font-medium">
-                                    {ticket.created_at ? format(new Date(ticket.created_at), "dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR }) : 'Data desconhecida'}
-                                </span>
+                        <div className="flex flex-col md:items-end gap-3">
+                            <div>
+                                <span className="text-slate-500 text-xs font-semibold uppercase tracking-wider block mb-1">Solicitado em</span>
+                                <div className="flex items-center gap-2 text-slate-300">
+                                    <Calendar className="w-4 h-4 text-indigo-400" />
+                                    <span className="text-sm font-medium">
+                                        {ticket.created_at ? format(new Date(ticket.created_at), "dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR }) : 'Data desconhecida'}
+                                    </span>
+                                </div>
                             </div>
+
+                            {ticket.conclued_at && (
+                                <div>
+                                    <span className="text-slate-500 text-xs font-semibold uppercase tracking-wider block mb-1">Resolvido em</span>
+                                    <div className="flex items-center gap-2 text-emerald-400">
+                                        <Calendar className="w-4 h-4 text-emerald-400" />
+                                        <span className="text-sm font-medium">
+                                            {format(new Date(ticket.conclued_at), "dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR })}
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
 

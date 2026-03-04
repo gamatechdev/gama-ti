@@ -7,6 +7,7 @@ export interface Chamado {
   responsavel: string | null;
   responsavel_id?: string | null; // Reverted to string (UUID)
   created_at: string;
+  conclued_at?: string | null;
 }
 
 export interface UserSession {
