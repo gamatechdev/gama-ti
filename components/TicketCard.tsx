@@ -2,55 +2,54 @@ import React from 'react';
 import { Chamado } from '../types';
 import { Clock, User, CheckCircle2, MessageSquare } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import ptBR from 'date-fns/locale/pt-BR';
+import { ptBR } from 'date-fns/locale/pt-BR';
 
 interface TicketCardProps {
   ticket: Chamado;
   onAccept: (id: number) => void;
   onFinalize: (id: number) => void;
   onClick: (ticket: Chamado) => void;
+  onChatClick: (ticket: Chamado) => void;
   currentUser: string;
   isProcessing: boolean;
 }
 
-export const TicketCard: React.FC<TicketCardProps> = ({ 
-  ticket, 
-  onAccept, 
+export const TicketCard: React.FC<TicketCardProps> = ({
+  ticket,
+  onAccept,
   onFinalize,
   onClick,
-  currentUser, 
-  isProcessing 
+  onChatClick,
+  currentUser,
+  isProcessing
 }) => {
   const isAssigned = !!ticket.responsavel;
   const isMine = ticket.responsavel === currentUser;
   const isDone = ticket.status === 'Concluído';
 
   return (
-    <div 
+    <div
+      // Abre o modal de detalhes ao clicar em qualquer lugar do card
       onClick={() => onClick(ticket)}
-      className={`p-4 mb-3 rounded-lg border transition-all duration-200 cursor-pointer group relative ${
-      isDone 
-        ? 'bg-slate-800/40 border-slate-800 opacity-60 hover:opacity-100' 
+      className={`p-4 mb-3 rounded-lg border transition-all duration-200 cursor-pointer group relative ${isDone
+        ? 'bg-slate-800/40 border-slate-800 opacity-60 hover:opacity-100'
         : 'bg-slate-800 border-slate-700 hover:border-indigo-500/50 hover:shadow-md hover:shadow-indigo-500/10'
-    }`}>
-      {/* Hover hint */}
-      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-        <MessageSquare className="w-4 h-4 text-indigo-400" />
-      </div>
+        }`}>
 
-      <div className="flex justify-between items-start mb-2 pr-6">
+      {/* Badge de Status - Canto Superior Direito */}
+      <span className={`absolute top-3 right-3 px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider rounded-full z-10 ${ticket.status === 'pendente' ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20' :
+        ticket.status === 'Em andamento' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' :
+          'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+        }`}>
+        {ticket.status || 'Novo'}
+      </span>
+
+      <div className="flex flex-col mb-2 pr-12">
         <h3 className={`font-semibold text-sm md:text-base line-clamp-2 ${isDone ? 'text-slate-400 line-through' : 'text-slate-100'}`}>
           {ticket.titulo || 'Sem título'}
         </h3>
-        <span className={`px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider rounded-full shrink-0 ${
-          ticket.status === 'pendente' ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20' :
-          ticket.status === 'Em andamento' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' :
-          'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
-        }`}>
-          {ticket.status || 'Novo'}
-        </span>
       </div>
-      
+
       <p className="text-slate-400 text-xs md:text-sm mb-3 line-clamp-3">
         {ticket.descricao || 'Sem descrição'}
       </p>
@@ -59,17 +58,33 @@ export const TicketCard: React.FC<TicketCardProps> = ({
         <div className="flex items-center text-xs text-slate-500 gap-2">
           <Clock className="w-3 h-3" />
           <span>
-            {ticket.created_at 
+            {ticket.created_at
               ? formatDistanceToNow(new Date(ticket.created_at), { addSuffix: true, locale: ptBR } as any)
               : 'Data desconhecida'}
           </span>
         </div>
-        
-        <div className="flex items-center text-xs text-slate-500 gap-2">
-          <User className="w-3 h-3" />
-          <span className={!ticket.solicitante ? 'italic' : ''}>
-             Solicitante: {ticket.solicitante || 'Anônimo'}
-          </span>
+
+        <div className="flex items-center justify-between text-xs text-slate-500 gap-2">
+          <div className="flex items-center gap-2">
+            <User className="w-3 h-3" />
+            <span className={!ticket.solicitante ? 'italic' : ''}>
+              Solicitante: {ticket.solicitante || 'Anônimo'}
+            </span>
+          </div>
+
+          {/* Botão de Chat alinhado à direita do solicitante */}
+          <button
+            onClick={(e) => {
+              // Interrompe a propagação para não abrir o modal de detalhes
+              e.stopPropagation();
+              // Abre o chat especificamente
+              onChatClick(ticket);
+            }}
+            className="p-1.5 bg-indigo-500/10 hover:bg-indigo-500 text-indigo-400 hover:text-white rounded-md transition-all opacity-0 group-hover:opacity-100"
+            title="Abrir Chat"
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
 
