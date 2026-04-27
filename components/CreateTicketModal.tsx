@@ -68,7 +68,7 @@ export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({ user, onCl
             titulo,
             descricao,
             solicitante: user.name,
-            status: 'Em andamento',
+            status: 'Não iniciado',
             responsavel: 'Arthur Silva',
             solicitante_id: user.db_id,
             responsavel_id: '92b01c3c-af11-4d37-bb30-087f828e6d48',

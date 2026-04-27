@@ -1,16 +1,18 @@
 import React from 'react';
 import { Chamado } from '../types';
-import { Clock, User, CheckCircle2, MessageSquare } from 'lucide-react';
+import { Clock, User, CheckCircle2, MessageSquare, Pencil } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale/pt-BR';
+import { UserSession } from '../types';
 
 interface TicketCardProps {
   ticket: Chamado;
   onAccept: (id: number) => void;
   onFinalize: (id: number) => void;
+  onEdit: (ticket: Chamado) => void;
   onClick: (ticket: Chamado) => void;
   onChatClick: (ticket: Chamado) => void;
-  currentUser: string;
+  currentUser: UserSession;
   isProcessing: boolean;
 }
 
@@ -18,14 +20,20 @@ export const TicketCard: React.FC<TicketCardProps> = ({
   ticket,
   onAccept,
   onFinalize,
+  onEdit,
   onClick,
   onChatClick,
   currentUser,
   isProcessing
 }) => {
   const isAssigned = !!ticket.responsavel;
-  const isMine = ticket.responsavel === currentUser;
+  const isMine = ticket.responsavel === currentUser.name;
   const isDone = ticket.status === 'Concluído';
+
+  // Verifica permissão de edição: Solicitante ou Role 6/7
+  const canEdit = ticket.solicitante_id === currentUser.db_id || 
+                  Number(currentUser.role_id) === 6 || 
+                  Number(currentUser.role_id) === 7;
 
   return (
     <div
@@ -37,11 +45,14 @@ export const TicketCard: React.FC<TicketCardProps> = ({
         }`}>
 
       {/* Badge de Status - Canto Superior Direito */}
-      <span className={`absolute top-3 right-3 px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider rounded-full z-10 whitespace-nowrap inline-flex items-center justify-center ${ticket.status === 'pendente' ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20' :
+      <span className={`absolute top-3 right-3 px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider rounded-full z-10 whitespace-nowrap inline-flex items-center justify-center ${
+        ticket.status === 'Não iniciado' ? 'bg-red-500/10 text-red-500 border border-red-500/20' :
+        ticket.status === 'Em Aberto' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' :
+        ticket.status === 'pendente' ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20' :
         ticket.status === 'Em andamento' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' :
           'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
         }`}>
-        {ticket.status || 'Novo'}
+        {ticket.status || 'Não iniciado'}
       </span>
 
       <div className="flex flex-col mb-2 pr-12">
@@ -72,19 +83,31 @@ export const TicketCard: React.FC<TicketCardProps> = ({
             </span>
           </div>
 
-          {/* Botão de Chat alinhado à direita do solicitante */}
-          <button
-            onClick={(e) => {
-              // Interrompe a propagação para não abrir o modal de detalhes
-              e.stopPropagation();
-              // Abre o chat especificamente
-              onChatClick(ticket);
-            }}
-            className="p-1.5 bg-indigo-500/10 hover:bg-indigo-500 text-indigo-400 hover:text-white rounded-md transition-all opacity-0 group-hover:opacity-100"
-            title="Abrir Chat"
-          >
-            <MessageSquare className="w-3.5 h-3.5" />
-          </button>
+          {/* Botões de Ação alinhados à direita do solicitante */}
+          <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all">
+            {canEdit && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit(ticket);
+                }}
+                className="p-1.5 bg-slate-700/50 hover:bg-indigo-600 text-slate-300 hover:text-white rounded-md transition-all"
+                title="Editar Chamado"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+            )}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onChatClick(ticket);
+              }}
+              className="p-1.5 bg-indigo-500/10 hover:bg-indigo-500 text-indigo-400 hover:text-white rounded-md transition-all"
+              title="Abrir Chat"
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       </div>
 

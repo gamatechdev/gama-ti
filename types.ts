@@ -3,12 +3,14 @@ export interface Chamado {
   titulo: string | null;
   descricao: string | null;
   solicitante: string | null;
+  solicitante_id?: number | null;
   status: string | null;
   responsavel: string | null;
   responsavel_id?: string | null; // Reverted to string (UUID)
   created_at: string;
   conclued_at?: string | null;
   sla_id?: number | null;
+  categorie_id?: number | null;
 }
 
 export interface UserSession {

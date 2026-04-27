@@ -6,6 +6,7 @@ import { NewTicketModal } from './components/NewTicketModal';
 import { TicketChatModal } from './components/TicketChatModal';
 import { TicketDetailsModal } from './components/TicketDetailsModal';
 import { CreateTicketModal } from './components/CreateTicketModal';
+import { EditTicketModal } from './components/EditTicketModal'; // Componente de edição de chamados
 import { Login } from './components/Login';
 import { MobileTicketList } from './components/local/MobileTicketList';
 import { playNotificationSound } from './utils/sound';
@@ -29,6 +30,7 @@ import {
   FilterX,
   MessageSquare,
   Plus,
+  Pencil,
   X
 } from 'lucide-react';
 import { format, isWithinInterval, startOfDay, endOfDay, parseISO } from 'date-fns';
@@ -46,6 +48,7 @@ const App: React.FC = () => {
   const [newTicket, setNewTicket] = useState<Chamado | null>(null);
   const [activeChatTicket, setActiveChatTicket] = useState<Chamado | null>(null);
   const [detailsTicket, setDetailsTicket] = useState<Chamado | null>(null);
+  const [editingTicket, setEditingTicket] = useState<Chamado | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
   const [slas, setSlas] = useState<any[]>([]);
@@ -553,6 +556,17 @@ const App: React.FC = () => {
         />
       )}
 
+      {editingTicket && user && (
+        <EditTicketModal
+          ticket={editingTicket}
+          user={user}
+          onClose={() => setEditingTicket(null)}
+          onSuccess={() => {
+            setEditingTicket(null);
+          }}
+        />
+      )}
+
       {/* Header */}
       <header className="h-16 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-6 shrink-0 z-10 relative">
         <div className="flex items-center gap-3">
@@ -613,343 +627,356 @@ const App: React.FC = () => {
         ) : (
           /* Dashboard Area (Center/Left) */
           <main className="flex-1 overflow-y-auto bg-slate-950 p-8 flex flex-col">
-          <div className="max-w-6xl w-full mx-auto space-y-8 flex-1 flex flex-col min-h-[500px]">
+            <div className="max-w-6xl w-full mx-auto space-y-8 flex-1 flex flex-col min-h-[500px]">
 
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
-              <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl flex flex-col relative overflow-hidden group hover:border-indigo-500/30 transition-colors">
-                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                  <AlertCircle className="w-16 h-16 text-yellow-500" />
-                </div>
-                <span className="text-slate-400 text-sm font-medium uppercase tracking-wider">Abertos</span>
-                <span className="text-4xl font-bold text-white mt-2">{stats.open}</span>
-                <span className="text-xs text-yellow-500 mt-2 flex items-center gap-1">
-                  <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></div>
-                  Em fila
-                </span>
-              </div>
-
-              <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl flex flex-col relative overflow-hidden group hover:border-indigo-500/30 transition-colors">
-                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                  <Inbox className="w-16 h-16 text-indigo-500" />
-                </div>
-                <span className="text-slate-400 text-sm font-medium uppercase tracking-wider">Recebidos</span>
-                <span className="text-4xl font-bold text-white mt-2">{stats.received}</span>
-                <span className="text-xs text-indigo-400 mt-2">Total geral</span>
-              </div>
-
-              <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl flex flex-col relative overflow-hidden group hover:border-indigo-500/30 transition-colors">
-                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                  <Layers className="w-16 h-16 text-slate-500" />
-                </div>
-                <span className="text-slate-400 text-sm font-medium uppercase tracking-wider">Fechados</span>
-                <span className="text-4xl font-bold text-white mt-2">{stats.closed}</span>
-                <span className="text-xs text-slate-500 mt-2">Concluídos total</span>
-              </div>
-
-              {(user?.role_id === 6 || user?.role_id === 7) && (
+              {/* Stats Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
                 <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl flex flex-col relative overflow-hidden group hover:border-indigo-500/30 transition-colors">
                   <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                    <CheckCircle2 className="w-16 h-16 text-emerald-500" />
+                    <AlertCircle className="w-16 h-16 text-yellow-500" />
                   </div>
-                  <span className="text-slate-400 text-sm font-medium uppercase tracking-wider">Fechados por mim</span>
-                  <span className="text-4xl font-bold text-emerald-400 mt-2">{stats.myClosed}</span>
-                  <span className="text-xs text-emerald-600 mt-2">Produtividade pessoal</span>
-                </div>
-              )}
-            </div>
-            <div className="md:hidden">
-              <MobileTicketList
-                tickets={filteredTickets}
-                onTicketClick={(t) => setDetailsTicket(t)}
-                onChatClick={(t) => setActiveChatTicket(t)}
-                searchValue={searchDesc}
-                onSearchChange={setSearchDesc}
-              />
-            </div>
-            {/* Detailed Table */}
-            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg flex-1 flex flex-col min-h-0">
-              <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/50 shrink-0">
-                <div className="flex items-center gap-2">
-                  <Layers className="w-5 h-5 text-indigo-500" />
-                  <h2 className="font-semibold text-lg text-white">Todos os Últimos Chamados</h2>
+                  <span className="text-slate-400 text-sm font-medium uppercase tracking-wider">Abertos</span>
+                  <span className="text-4xl font-bold text-white mt-2">{stats.open}</span>
+                  <span className="text-xs text-yellow-500 mt-2 flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></div>
+                    Em fila
+                  </span>
                 </div>
 
-                {/* Botão Abrir Chamado */}
-                <button
-                  onClick={() => setShowCreateModal(true)}
-                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-lg shadow-indigo-500/20 active:scale-95"
-                  title="Abrir Novo Chamado"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span className="hidden sm:inline">Abrir Chamado</span>
-                </button>
+                <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl flex flex-col relative overflow-hidden group hover:border-indigo-500/30 transition-colors">
+                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                    <Inbox className="w-16 h-16 text-indigo-500" />
+                  </div>
+                  <span className="text-slate-400 text-sm font-medium uppercase tracking-wider">Recebidos</span>
+                  <span className="text-4xl font-bold text-white mt-2">{stats.received}</span>
+                  <span className="text-xs text-indigo-400 mt-2">Total geral</span>
+                </div>
+
+                <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl flex flex-col relative overflow-hidden group hover:border-indigo-500/30 transition-colors">
+                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                    <Layers className="w-16 h-16 text-slate-500" />
+                  </div>
+                  <span className="text-slate-400 text-sm font-medium uppercase tracking-wider">Fechados</span>
+                  <span className="text-4xl font-bold text-white mt-2">{stats.closed}</span>
+                  <span className="text-xs text-slate-500 mt-2">Concluídos total</span>
+                </div>
+
+                {(user?.role_id === 6 || user?.role_id === 7) && (
+                  <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl flex flex-col relative overflow-hidden group hover:border-indigo-500/30 transition-colors">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                      <CheckCircle2 className="w-16 h-16 text-emerald-500" />
+                    </div>
+                    <span className="text-slate-400 text-sm font-medium uppercase tracking-wider">Fechados por mim</span>
+                    <span className="text-4xl font-bold text-emerald-400 mt-2">{stats.myClosed}</span>
+                    <span className="text-xs text-emerald-600 mt-2">Produtividade pessoal</span>
+                  </div>
+                )}
               </div>
-              {/* Visualização Mobile em Cards (Visível apenas até breakpoint MD) */}
-              {/* Barra de Pesquisa e Filtros */}
-              <div className="p-6 bg-slate-900/30 border-b border-slate-800 flex flex-col md:flex-row gap-4 items-end shrink-0">
-                {/* Campo de Pesquisa */}
-                <div className="flex-1 w-full relative group">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-indigo-400 transition-colors" />
-                    <input
-                      id="searchDesc"
-                      type="text"
-                      value={searchDesc}
-                      onChange={(e) => setSearchDesc(e.target.value)}
-                      placeholder="Pesquisar por título ou descrição..."
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg py-2 pl-10 pr-4 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 transition-all placeholder:text-slate-600"
-                    />
+              <div className="md:hidden">
+                <MobileTicketList
+                  tickets={filteredTickets}
+                  onTicketClick={(t) => setDetailsTicket(t)}
+                  onChatClick={(t) => setActiveChatTicket(t)}
+                  searchValue={searchDesc}
+                  onSearchChange={setSearchDesc}
+                />
+              </div>
+              {/* Detailed Table */}
+              <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg flex-1 flex flex-col min-h-0">
+                <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/50 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <Layers className="w-5 h-5 text-indigo-500" />
+                    <h2 className="font-semibold text-lg text-white">Todos os Últimos Chamados</h2>
                   </div>
+
+                  {/* Botão Abrir Chamado */}
+                  <button
+                    onClick={() => setShowCreateModal(true)}
+                    className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-lg shadow-indigo-500/20 active:scale-95"
+                    title="Abrir Novo Chamado"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span className="hidden sm:inline">Abrir Chamado</span>
+                  </button>
                 </div>
-
-                <div className="flex gap-3 shrink-0">
-                  {/* Botão de Filtros (Abre o Modal) */}
-                  <div className="relative">
-                    <button
-                      onClick={() => setShowFiltersModal(true)}
-                      className={`p-2 rounded-lg border flex items-center gap-2 transition-all ${(multiFilters.solicitantes.length > 0 || multiFilters.responsaveis.length > 0 || multiFilters.status.length > 0 || multiFilters.prioridades.length > 0)
-                        ? 'bg-indigo-600/20 border-indigo-500 text-white'
-                        : 'bg-slate-950 border-slate-700 text-slate-400 hover:border-slate-600'
-                        }`}
-                      title="Abrir Filtros"
-                    >
-                      <List className="w-5 h-5" />
-                      {(multiFilters.solicitantes.length + multiFilters.responsaveis.length + multiFilters.status.length + multiFilters.prioridades.length) > 0 && (
-                        <span className="absolute -top-1 -right-1 bg-indigo-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold border border-slate-900">
-                          {multiFilters.solicitantes.length + multiFilters.responsaveis.length + multiFilters.status.length + multiFilters.prioridades.length}
-                        </span>
-                      )}
-                      <span className="text-xs font-bold hidden sm:inline">Filtros</span>
-                    </button>
+                {/* Visualização Mobile em Cards (Visível apenas até breakpoint MD) */}
+                {/* Barra de Pesquisa e Filtros */}
+                <div className="p-6 bg-slate-900/30 border-b border-slate-800 flex flex-col md:flex-row gap-4 items-end shrink-0">
+                  {/* Campo de Pesquisa */}
+                  <div className="flex-1 w-full relative group">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-indigo-400 transition-colors" />
+                      <input
+                        id="searchDesc"
+                        type="text"
+                        value={searchDesc}
+                        onChange={(e) => setSearchDesc(e.target.value)}
+                        placeholder="Pesquisar por título ou descrição..."
+                        className="w-full bg-slate-950 border border-slate-700 rounded-lg py-2 pl-10 pr-4 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 transition-all placeholder:text-slate-600"
+                      />
+                    </div>
                   </div>
 
-                  {/* Filtro Data */}
-                  <div className="relative">
-                    <button
-                      onClick={() => {
-                        setShowDateDropdown(!showDateDropdown);
-                      }}
-                      className={`p-2 rounded-lg border flex items-center gap-2 transition-all ${(dateStart || dateEnd) ? 'bg-indigo-600/20 border-indigo-500 text-white' : 'bg-slate-950 border-slate-700 text-slate-400 hover:border-slate-600'
-                        }`}
-                      title="Filtrar por Data"
-                    >
-                      <Calendar className="w-5 h-5" />
-                      <ChevronDown className={`w-3 h-3 transition-transform ${showDateDropdown ? 'rotate-180' : ''}`} />
-                    </button>
+                  <div className="flex gap-3 shrink-0">
+                    {/* Botão de Filtros (Abre o Modal) */}
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowFiltersModal(true)}
+                        className={`p-2 rounded-lg border flex items-center gap-2 transition-all ${(multiFilters.solicitantes.length > 0 || multiFilters.responsaveis.length > 0 || multiFilters.status.length > 0 || multiFilters.prioridades.length > 0)
+                          ? 'bg-indigo-600/20 border-indigo-500 text-white'
+                          : 'bg-slate-950 border-slate-700 text-slate-400 hover:border-slate-600'
+                          }`}
+                        title="Abrir Filtros"
+                      >
+                        <List className="w-5 h-5" />
+                        {(multiFilters.solicitantes.length + multiFilters.responsaveis.length + multiFilters.status.length + multiFilters.prioridades.length) > 0 && (
+                          <span className="absolute -top-1 -right-1 bg-indigo-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold border border-slate-900">
+                            {multiFilters.solicitantes.length + multiFilters.responsaveis.length + multiFilters.status.length + multiFilters.prioridades.length}
+                          </span>
+                        )}
+                        <span className="text-xs font-bold hidden sm:inline">Filtros</span>
+                      </button>
+                    </div>
 
-                    {showDateDropdown && (
-                      <div className="absolute right-0 mt-2 w-72 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-                        <div className="p-3 border-b border-slate-700 bg-slate-800/50">
-                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Filtrar por Data</span>
+                    {/* Filtro Data */}
+                    <div className="relative">
+                      <button
+                        onClick={() => {
+                          setShowDateDropdown(!showDateDropdown);
+                        }}
+                        className={`p-2 rounded-lg border flex items-center gap-2 transition-all ${(dateStart || dateEnd) ? 'bg-indigo-600/20 border-indigo-500 text-white' : 'bg-slate-950 border-slate-700 text-slate-400 hover:border-slate-600'
+                          }`}
+                        title="Filtrar por Data"
+                      >
+                        <Calendar className="w-5 h-5" />
+                        <ChevronDown className={`w-3 h-3 transition-transform ${showDateDropdown ? 'rotate-180' : ''}`} />
+                      </button>
+
+                      {showDateDropdown && (
+                        <div className="absolute right-0 mt-2 w-72 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                          <div className="p-3 border-b border-slate-700 bg-slate-800/50">
+                            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Filtrar por Data</span>
+                          </div>
+                          <div className="p-4 space-y-4">
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400 uppercase font-medium">Data Inicial</label>
+                              <input
+                                type="date"
+                                value={dateStart}
+                                onChange={(e) => setDateStart(e.target.value)}
+                                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 transition-all [color-scheme:dark]"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400 uppercase font-medium">Data Final</label>
+                              <input
+                                type="date"
+                                value={dateEnd}
+                                onChange={(e) => setDateEnd(e.target.value)}
+                                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 transition-all [color-scheme:dark]"
+                              />
+                            </div>
+                            <div className="flex gap-2 pt-2">
+                              <button
+                                onClick={() => {
+                                  const today = new Date().toISOString().split('T')[0];
+                                  setDateStart(today);
+                                  setDateEnd(today);
+                                }}
+                                className="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-200 text-[10px] font-bold py-1.5 rounded-md transition-colors"
+                              >
+                                Hoje
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setDateStart('');
+                                  setDateEnd('');
+                                  setShowDateDropdown(false);
+                                }}
+                                className="flex-1 bg-slate-700/50 hover:bg-red-500/20 hover:text-red-400 text-slate-400 text-[10px] font-bold py-1.5 rounded-md transition-colors"
+                              >
+                                Limpar
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                        <div className="p-4 space-y-4">
-                          <div className="space-y-1">
-                            <label className="text-[10px] text-slate-400 uppercase font-medium">Data Inicial</label>
-                            <input
-                              type="date"
-                              value={dateStart}
-                              onChange={(e) => setDateStart(e.target.value)}
-                              className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 transition-all [color-scheme:dark]"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-[10px] text-slate-400 uppercase font-medium">Data Final</label>
-                            <input
-                              type="date"
-                              value={dateEnd}
-                              onChange={(e) => setDateEnd(e.target.value)}
-                              className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 transition-all [color-scheme:dark]"
-                            />
-                          </div>
-                          <div className="flex gap-2 pt-2">
-                            <button
-                              onClick={() => {
-                                const today = new Date().toISOString().split('T')[0];
-                                setDateStart(today);
-                                setDateEnd(today);
-                              }}
-                              className="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-200 text-[10px] font-bold py-1.5 rounded-md transition-colors"
-                            >
-                              Hoje
-                            </button>
-                            <button
-                              onClick={() => {
-                                setDateStart('');
-                                setDateEnd('');
-                                setShowDateDropdown(false);
-                              }}
-                              className="flex-1 bg-slate-700/50 hover:bg-red-500/20 hover:text-red-400 text-slate-400 text-[10px] font-bold py-1.5 rounded-md transition-colors"
-                            >
-                              Limpar
-                            </button>
-                          </div>
-                        </div>
-                      </div>
+                      )}
+                    </div>
+
+                    {/* Botão Limpar Filtros (se houver filtros ativos) */}
+                    {(searchDesc || multiFilters.solicitantes.length > 0 || multiFilters.responsaveis.length > 0 || multiFilters.status.length > 0 || multiFilters.prioridades.length > 0 || dateStart || dateEnd) && (
+                      <button
+                        onClick={clearAllFilters}
+                        className="p-2 text-slate-500 hover:text-red-400 transition-colors"
+                        title="Limpar Filtros"
+                      >
+                        <FilterX className="w-5 h-5" />
+                      </button>
                     )}
                   </div>
 
-                  {/* Botão Limpar Filtros (se houver filtros ativos) */}
-                  {(searchDesc || multiFilters.solicitantes.length > 0 || multiFilters.responsaveis.length > 0 || multiFilters.status.length > 0 || multiFilters.prioridades.length > 0 || dateStart || dateEnd) && (
-                    <button
-                      onClick={clearAllFilters}
-                      className="p-2 text-slate-500 hover:text-red-400 transition-colors"
-                      title="Limpar Filtros"
-                    >
-                      <FilterX className="w-5 h-5" />
-                    </button>
-                  )}
                 </div>
 
-              </div>
-
-              <div className="flex-1 overflow-auto custom-scrollbar">
-                {/* Visualização Desktop em Tabela (Visível de MD pra cima) */}
-                <table className="hidden md:table w-full text-left border-collapse relative">
-                  <thead className="sticky top-0 z-10 bg-slate-950">
-                    <tr className="bg-slate-950/90 text-slate-400 text-xs uppercase font-semibold backdrop-blur-sm">
-                      <th className="px-6 py-4">ID</th>
-                      <th className="px-6 py-4">Título</th>
-                      <th className="px-6 py-4">Solicitante</th>
-                      <th className="px-6 py-4">Responsável</th>
-                      <th className="px-6 py-4 whitespace-nowrap">Solicitado em</th>
-                      <th className="px-6 py-4 whitespace-nowrap">Resolvido em</th>
-                      <th className="px-6 py-4">Prioridade</th>
-                      <th className="px-6 py-4">Status</th>
-                      {(user?.role_id === 6 || user?.role_id === 7 || user?.db_id) && (
-                        <th className="px-6 py-4">Ação</th>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800 h-16">
-                    {filteredTickets.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="px-6 py-8 text-center text-slate-500">
-                          {tickets.length === 0 ? 'Nenhum registro encontrado.' : 'Nenhum chamado corresponde aos filtros aplicados.'}
-                        </td>
+                <div className="flex-1 overflow-auto custom-scrollbar">
+                  {/* Visualização Desktop em Tabela (Visível de MD pra cima) */}
+                  <table className="hidden md:table w-full text-left border-collapse relative">
+                    <thead className="sticky top-0 z-10 bg-slate-950">
+                      <tr className="bg-slate-950/90 text-slate-400 text-xs uppercase font-semibold backdrop-blur-sm">
+                        <th className="px-6 py-4">ID</th>
+                        <th className="px-6 py-4">Título</th>
+                        <th className="px-6 py-4">Solicitante</th>
+                        <th className="px-6 py-4">Responsável</th>
+                        <th className="px-6 py-4 whitespace-nowrap">Solicitado em</th>
+                        <th className="px-6 py-4 whitespace-nowrap">Resolvido em</th>
+                        <th className="px-6 py-4">Prioridade</th>
+                        <th className="px-6 py-4">Status</th>
+                        {(user?.role_id === 6 || user?.role_id === 7 || user?.db_id) && (
+                          <th className="px-6 py-4">Ação</th>
+                        )}
                       </tr>
-                    ) : (
-                      filteredTickets.map((t) => (
-                        <tr
-                          key={t.id}
-                          // Abre os detalhes ao clicar na linha
-                          onClick={() => setDetailsTicket(t)}
-                          className="hover:bg-slate-800/50 transition-colors text-sm group cursor-pointer"
-                        >
-                          <td className="px-6 py-4 text-slate-500 font-mono group-hover:text-indigo-400 transition-colors">#{t.id}</td>
-                          <td className="px-6 py-4 font-medium text-slate-200">{t.titulo}</td>
-                          <td className="px-6 py-4 text-slate-400">{t.solicitante || '-'}</td>
-                          <td className="px-6 py-4 text-slate-400">
-                            {t.responsavel ? (
-                              <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-300">
-                                  {t.responsavel.charAt(0).toUpperCase()}
-                                </div>
-                                {t.responsavel}
-                              </div>
-                            ) : '-'}
+                    </thead>
+                    <tbody className="divide-y divide-slate-800 h-16">
+                      {filteredTickets.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="px-6 py-8 text-center text-slate-500">
+                            {tickets.length === 0 ? 'Nenhum registro encontrado.' : 'Nenhum chamado corresponde aos filtros aplicados.'}
                           </td>
-                          <td className="px-6 py-4 text-slate-500 whitespace-nowrap">
-                            {t.created_at ? format(new Date(t.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR }) : '-'}
-                          </td>
-                          <td className="px-6 py-4 text-slate-500 whitespace-nowrap">
-                            {t.conclued_at ? format(new Date(t.conclued_at), "dd/MM/yyyy HH:mm", { locale: ptBR }) : '-'}
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase border ${slas.find(s => Number(s.id) === Number(t.sla_id))?.status === 'Alta'
-                              ? 'bg-red-500/10 text-red-500 border-red-500/20'
-                              : slas.find(s => Number(s.id) === Number(t.sla_id))?.status === 'Média'
-                                ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
-                                : slas.find(s => Number(s.id) === Number(t.sla_id))?.status === 'Baixa'
-                                  ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                                  : 'bg-slate-800 text-slate-300 border-slate-700'
-                              }`}>
-                              {slas.find(s => Number(s.id) === Number(t.sla_id))?.status || '-'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={`px-2 py-1 rounded-full text-[10px] uppercase font-bold border whitespace-nowrap inline-flex items-center justify-center ${t.status === 'Concluído' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
-                              t.status === 'Em andamento' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' :
-                                'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
-                              }`}>
-                              {t.status || 'Novo'}
-                            </span>
-                          </td>
-                          {(t.solicitante_id === user?.db_id || user?.role_id === 6 || user?.role_id === 7) && (
-                            <td className="px-6 py-4">
-                              <div className="relative">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setOpenDropdownId(openDropdownId === t.id ? null : t.id);
-                                  }}
-                                  className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 transition-colors"
-                                >
-                                  <MoreVertical className="w-4 h-4" />
-                                </button>
-
-                                {openDropdownId === t.id && (
-                                  <div className="absolute right-0 mt-2 w-48 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-                                    <div className="py-1">
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setActiveChatTicket(t);
-                                          setOpenDropdownId(null);
-                                        }}
-                                        className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-2"
-                                      >
-                                        <MessageSquare className="w-4 h-4 text-indigo-400" />
-                                        Abrir Chat
-                                      </button>
-
-                                      {(user?.role_id === 6 || user?.role_id === 7) && (
-                                        <>
-                                          <div className="h-px bg-slate-700 my-1" />
-                                          {t.status !== 'Concluído' ? (
-                                            <button
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleFinalizeTicket(t.id);
-                                                setOpenDropdownId(null);
-                                              }}
-                                              className="w-full text-left px-4 py-2 text-sm text-emerald-400 hover:bg-slate-700 flex items-center gap-2"
-                                            >
-                                              <CheckCircle2 className="w-4 h-4" />
-                                              Finalizar Chamado
-                                            </button>
-                                          ) : (
-                                            <button
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleAcceptTicket(t.id);
-                                                setOpenDropdownId(null);
-                                              }}
-                                              className="w-full text-left px-4 py-2 text-sm text-indigo-400 hover:bg-slate-700 flex items-center gap-2"
-                                            >
-                                              <Loader2 className="w-4 h-4" />
-                                              Reabrir Chamado
-                                            </button>
-                                          )}
-                                        </>
-                                      )}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </td>
-                          )}
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                      ) : (
+                        filteredTickets.map((t) => (
+                          <tr
+                            key={t.id}
+                            // Abre os detalhes ao clicar na linha
+                            onClick={() => setDetailsTicket(t)}
+                            className="hover:bg-slate-800/50 transition-colors text-sm group cursor-pointer"
+                          >
+                            <td className="px-6 py-4 text-slate-500 font-mono group-hover:text-indigo-400 transition-colors">#{t.id}</td>
+                            <td className="px-6 py-4 font-medium text-slate-200">{t.titulo}</td>
+                            <td className="px-6 py-4 text-slate-400">{t.solicitante || '-'}</td>
+                            <td className="px-6 py-4 text-slate-400">
+                              {t.responsavel ? (
+                                <div className="flex items-center gap-2">
+                                  <div className="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-300">
+                                    {t.responsavel.charAt(0).toUpperCase()}
+                                  </div>
+                                  {t.responsavel}
+                                </div>
+                              ) : '-'}
+                            </td>
+                            <td className="px-6 py-4 text-slate-500 whitespace-nowrap">
+                              {t.created_at ? format(new Date(t.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR }) : '-'}
+                            </td>
+                            <td className="px-6 py-4 text-slate-500 whitespace-nowrap">
+                              {t.conclued_at ? format(new Date(t.conclued_at), "dd/MM/yyyy HH:mm", { locale: ptBR }) : '-'}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase border ${slas.find(s => Number(s.id) === Number(t.sla_id))?.status === 'Alta'
+                                ? 'bg-red-500/10 text-red-500 border-red-500/20'
+                                : slas.find(s => Number(s.id) === Number(t.sla_id))?.status === 'Média'
+                                  ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
+                                  : slas.find(s => Number(s.id) === Number(t.sla_id))?.status === 'Baixa'
+                                    ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                                    : 'bg-slate-800 text-slate-300 border-slate-700'
+                                }`}>
+                                {slas.find(s => Number(s.id) === Number(t.sla_id))?.status || '-'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className={`px-2 py-1 rounded-full text-[10px] uppercase font-bold border whitespace-nowrap inline-flex items-center justify-center ${t.status === 'Concluído' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
+                                t.status === 'Em andamento' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' :
+                                  t.status === 'Não iniciado' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
+                                    'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
+                                }`}>
+                                {t.status || 'Não iniciado'}
+                              </span>
+                            </td>
+                            {(t.solicitante_id === user?.db_id || Number(user?.role_id) === 6 || Number(user?.role_id) === 7) && (
+                              <td className="px-6 py-4">
+                                <div className="relative">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenDropdownId(openDropdownId === t.id ? null : t.id);
+                                    }}
+                                    className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 transition-colors"
+                                  >
+                                    <MoreVertical className="w-4 h-4" />
+                                  </button>
 
-          </div>
-        </main>
-      )}
+                                  {openDropdownId === t.id && (
+                                    <div className="absolute right-0 mt-2 w-48 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                                      <div className="py-1">
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActiveChatTicket(t);
+                                            setOpenDropdownId(null);
+                                          }}
+                                          className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-2"
+                                        >
+                                          <MessageSquare className="w-4 h-4 text-indigo-400" />
+                                          Abrir Chat
+                                        </button>
+
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setEditingTicket(t);
+                                            setOpenDropdownId(null);
+                                          }}
+                                          className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-2"
+                                        >
+                                          <Pencil className="w-4 h-4 text-amber-400" />
+                                          Editar Chamado
+                                        </button>
+
+                                        {(user?.role_id === 6 || user?.role_id === 7) && (
+                                          <>
+                                            <div className="h-px bg-slate-700 my-1" />
+                                            {t.status !== 'Concluído' ? (
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleFinalizeTicket(t.id);
+                                                  setOpenDropdownId(null);
+                                                }}
+                                                className="w-full text-left px-4 py-2 text-sm text-emerald-400 hover:bg-slate-700 flex items-center gap-2"
+                                              >
+                                                <CheckCircle2 className="w-4 h-4" />
+                                                Finalizar Chamado
+                                              </button>
+                                            ) : (
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleAcceptTicket(t.id);
+                                                  setOpenDropdownId(null);
+                                                }}
+                                                className="w-full text-left px-4 py-2 text-sm text-indigo-400 hover:bg-slate-700 flex items-center gap-2"
+                                              >
+                                                <Loader2 className="w-4 h-4" />
+                                                Reabrir Chamado
+                                              </button>
+                                            )}
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                            )}
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+          </main>
+        )}
 
         {/* Overlay do Mobile */}
         {showMobileQueue && (
@@ -1021,9 +1048,10 @@ const App: React.FC = () => {
                   onClick={(t) => setDetailsTicket(t)}
                   // Configura para abrir chat no ícone azul
                   onChatClick={(t) => setActiveChatTicket(t)}
+                  onEdit={(t) => setEditingTicket(t)}
                   onAccept={handleAcceptTicket}
                   onFinalize={handleFinalizeTicket}
-                  currentUser={user.name}
+                  currentUser={user}
                   isProcessing={processingId === ticket.id}
                 />
               ))

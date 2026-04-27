@@ -55,6 +55,10 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({ ticket, 
                 return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
             case 'Em andamento':
                 return 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20';
+            case 'Não iniciado':
+                return 'bg-red-500/10 text-red-500 border-red-500/20';
+            case 'Em Aberto':
+                return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
             default:
                 return 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20';
         }
