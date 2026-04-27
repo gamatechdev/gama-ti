@@ -30,7 +30,7 @@ export const TicketDetailsModal: React.FC<TicketDetailsModalProps> = ({ ticket, 
                 // Nota: Idealmente buscaríamos por ID se disponível no objeto ticket
                 const { data, error } = await supabase
                     .from('users')
-                    .select('img_url')
+                    .select('user_id, img_url, role')
                     .eq('username', ticket.solicitante)
                     .maybeSingle();
 

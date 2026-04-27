@@ -5,11 +5,38 @@ import { TicketCard } from './components/TicketCard';
 import { NewTicketModal } from './components/NewTicketModal';
 import { TicketChatModal } from './components/TicketChatModal';
 import { TicketDetailsModal } from './components/TicketDetailsModal';
+import { CreateTicketModal } from './components/CreateTicketModal';
 import { Login } from './components/Login';
+import { MobileTicketList } from './components/local/MobileTicketList';
 import { playNotificationSound } from './utils/sound';
-import { LayoutDashboard, LogOut, Loader2, Inbox, CheckCircle2, AlertCircle, Layers, MessageSquare, Search, User, Monitor, ChevronDown, FilterX, Calendar } from 'lucide-react';
+import {
+  Users,
+  Search,
+  Filter,
+  ChevronDown,
+  MoreVertical,
+  Loader2,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  Inbox,
+  Layers,
+  LogOut,
+  List,
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  FilterX,
+  MessageSquare,
+  Plus,
+  X
+} from 'lucide-react';
 import { format, isWithinInterval, startOfDay, endOfDay, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale/pt-BR';
+import { useScreenWidth } from './utils/useScreenWidth';
+import { Sidebar } from './components/features/Sidebar';
+import { CategoriesManager } from './components/features/CategoriesManager';
+import { FiltersModal, MultiFilters } from './components/local/FiltersModal';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<UserSession | null>(null);
@@ -19,6 +46,9 @@ const App: React.FC = () => {
   const [newTicket, setNewTicket] = useState<Chamado | null>(null);
   const [activeChatTicket, setActiveChatTicket] = useState<Chamado | null>(null);
   const [detailsTicket, setDetailsTicket] = useState<Chamado | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
+  const [slas, setSlas] = useState<any[]>([]);
 
   // Estados para Busca e Filtros
   const [searchDesc, setSearchDesc] = useState('');
@@ -27,13 +57,27 @@ const App: React.FC = () => {
   const [showSolicitanteDropdown, setShowSolicitanteDropdown] = useState(false);
   const [showResponsavelDropdown, setShowResponsavelDropdown] = useState(false);
   const [showDateDropdown, setShowDateDropdown] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [mainTab, setMainTab] = useState('dashboard');
   const [dateStart, setDateStart] = useState<string>('');
   const [dateEnd, setDateEnd] = useState<string>('');
   const [userImgMap, setUserImgMap] = useState<Record<string, string>>({});
 
+  // Estados para Filtros Avançados (Multi-seleção)
+  const [multiFilters, setMultiFilters] = useState<MultiFilters>({
+    solicitantes: [],
+    responsaveis: [],
+    status: [],
+    prioridades: [],
+  });
+  const [showFiltersModal, setShowFiltersModal] = useState(false);
+
+  const [showMobileQueue, setShowMobileQueue] = useState(false);
+  const [activeSidebarTab, setActiveSidebarTab] = useState<'queue' | 'myTickets'>('queue');
+
   const [loadingTickets, setLoadingTickets] = useState(false);
   const [processingId, setProcessingId] = useState<number | null>(null);
-
+  const screenWidth = useScreenWidth();
   const audioEnabled = useRef(false);
 
   // Solicita permissão para notificações desktop
@@ -65,7 +109,7 @@ const App: React.FC = () => {
       try {
         const { data, error } = await supabase
           .from('users')
-          .select('username, img_url')
+          .select('user_id, username, img_url, role')
           .eq('user_id', session.user.id)
           .maybeSingle();
 
@@ -73,8 +117,10 @@ const App: React.FC = () => {
         if (data && mounted) {
           setUser(prev => prev ? {
             ...prev,
+            db_id: data.user_id,                   // Adiciona o ID sequencial do banco
             name: data.username || prev.name, // Substitui pelo nome real se existir
-            avatar: data.img_url              // Adiciona a foto de perfil
+            avatar: data.img_url,             // Adiciona a foto de perfil
+            role_id: data.role,            // Adiciona o ID da role
           } : null);
         }
       } catch (err) {
@@ -136,6 +182,19 @@ const App: React.FC = () => {
       mounted = false;
       authListener.subscription.unsubscribe();
     };
+  }, []);
+
+  // --- SLAs Data ---
+  useEffect(() => {
+    const fetchSLAs = async () => {
+      try {
+        const { data, error } = await supabase.from('sla').select('*');
+        if (!error && data) setSlas(data);
+      } catch (err) {
+        console.error('Error fetching SLAs:', err);
+      }
+    };
+    fetchSLAs();
   }, []);
 
   // --- Tickets Data & Realtime ---
@@ -337,6 +396,14 @@ const App: React.FC = () => {
     return Array.from(new Set(names)).sort();
   }, [tickets]);
 
+  const uniqueStatuses = useMemo(() => {
+    return Array.from(new Set(tickets.map(t => t.status || 'Novo'))).sort();
+  }, [tickets]);
+
+  const uniquePrioridades = useMemo(() => {
+    return Array.from(new Set(tickets.map(t => slas.find(s => Number(s.id) === Number(t.sla_id))?.status || '-'))).filter(p => p !== '-').sort();
+  }, [tickets, slas]);
+
   // Busca imagens de perfil para todos os usuários únicos nos filtros
   // Usa um ref para rastrear quais nomes já foram buscados e evitar re-buscas desnecessárias
   const fetchedNamesRef = useRef<Set<string>>(new Set());
@@ -353,7 +420,7 @@ const App: React.FC = () => {
       try {
         const { data, error } = await supabase
           .from('users')
-          .select('username, img_url')
+          .select('id, username, img_url, role')
           .in('username', newNames);
 
         if (!error && data) {
@@ -381,11 +448,18 @@ const App: React.FC = () => {
   // Filtra os chamados com base no termo de busca e filtros selecionados
   const filteredTickets = useMemo(() => {
     return tickets.filter(t => {
+      // Busca global básica (Título/Descrição)
       const matchDesc = !searchDesc || (t.descricao?.toLowerCase().includes(searchDesc.toLowerCase()) || t.titulo?.toLowerCase().includes(searchDesc.toLowerCase()));
-      const matchSolicitante = !selectedSolicitante || t.solicitante === selectedSolicitante;
-      const matchResponsavel = !selectedResponsavel || t.responsavel === selectedResponsavel;
 
-      // Lógica de Filtro por Data
+      // Filtros Multi-seleção (Modal)
+      const matchSolicitante = multiFilters.solicitantes.length === 0 || multiFilters.solicitantes.includes(t.solicitante || '');
+      const matchResponsavel = multiFilters.responsaveis.length === 0 || multiFilters.responsaveis.includes(t.responsavel || '');
+      const matchStatus = multiFilters.status.length === 0 || multiFilters.status.includes(t.status || 'Novo');
+
+      const ticketSlaName = slas.find(s => Number(s.id) === Number(t.sla_id))?.status || '';
+      const matchPrioridade = multiFilters.prioridades.length === 0 || multiFilters.prioridades.includes(ticketSlaName);
+
+      // Filtro Data
       let matchDate = true;
       if (t.created_at) {
         const ticketDate = parseISO(t.created_at);
@@ -401,9 +475,9 @@ const App: React.FC = () => {
         }
       }
 
-      return matchDesc && matchSolicitante && matchResponsavel && matchDate;
+      return matchDesc && matchSolicitante && matchResponsavel && matchStatus && matchPrioridade && matchDate;
     });
-  }, [tickets, searchDesc, selectedSolicitante, selectedResponsavel, dateStart, dateEnd]);
+  }, [tickets, searchDesc, multiFilters, dateStart, dateEnd, slas]);
 
   if (authLoading) {
     return (
@@ -415,6 +489,30 @@ const App: React.FC = () => {
   }
 
   if (!user) return <Login />;
+
+  const toggleMultiFilter = (category: keyof MultiFilters, value: string) => {
+    setMultiFilters(prev => {
+      const current = prev[category];
+      const next = current.includes(value)
+        ? current.filter(v => v !== value)
+        : [...current, value];
+      return { ...prev, [category]: next };
+    });
+  };
+
+  const clearAllFilters = () => {
+    setSearchDesc('');
+    setMultiFilters({
+      solicitantes: [],
+      responsaveis: [],
+      status: [],
+      prioridades: [],
+    });
+    setDateStart('');
+    setDateEnd('');
+  };
+
+  const isAnyFilterActive = searchDesc || multiFilters.solicitantes.length > 0 || multiFilters.responsaveis.length > 0 || multiFilters.status.length > 0 || multiFilters.prioridades.length > 0 || dateStart || dateEnd;
 
   return (
     <div className="h-screen bg-slate-950 flex flex-col overflow-hidden text-slate-200 font-sans relative">
@@ -443,6 +541,18 @@ const App: React.FC = () => {
         />
       )}
 
+      {showCreateModal && user && (
+        <CreateTicketModal
+          user={user}
+          onClose={() => setShowCreateModal(false)}
+          onSuccess={() => {
+            // Recarrega os chamados ou apenas deixa o realtime agir
+            // fetchTickets() seria bom se não estivesse dentro de um useEffect
+            // Mas o realtime deve cuidar disso.
+          }}
+        />
+      )}
+
       {/* Header */}
       <header className="h-16 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-6 shrink-0 z-10 relative">
         <div className="flex items-center gap-3">
@@ -468,9 +578,17 @@ const App: React.FC = () => {
               </div>
             )}
           </div>
-          <div className="h-8 w-px bg-slate-800 mx-2"></div>
+          <div className="h-8 w-px bg-slate-800 mx-2 hidden md:block"></div>
           <button onClick={handleLogout} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-red-400 transition-colors">
             <LogOut className="w-5 h-5" />
+          </button>
+
+          <button
+            onClick={() => setShowMobileQueue(true)}
+            className="md:hidden p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors border border-slate-700 bg-slate-800/50"
+            title="Ver Fila de Chamados"
+          >
+            <List className="w-5 h-5" />
           </button>
         </div>
       </header>
@@ -478,12 +596,27 @@ const App: React.FC = () => {
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden relative z-0">
 
-        {/* Dashboard Area (Center/Left) */}
-        <main className="flex-1 overflow-y-auto bg-slate-950 p-8">
-          <div className="max-w-6xl mx-auto space-y-8">
+        {/* Sidebar Esquerda */}
+        <div className="hidden md:flex">
+          <Sidebar
+            user={user}
+            activeTab={mainTab}
+            onTabChange={setMainTab}
+            isCollapsed={isSidebarCollapsed}
+            onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          />
+        </div>
+
+        {/* Área de Conteúdo Principal */}
+        {mainTab === 'categories' ? (
+          <CategoriesManager />
+        ) : (
+          /* Dashboard Area (Center/Left) */
+          <main className="flex-1 overflow-y-auto bg-slate-950 p-8 flex flex-col">
+          <div className="max-w-6xl w-full mx-auto space-y-8 flex-1 flex flex-col min-h-[500px]">
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
               <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl flex flex-col relative overflow-hidden group hover:border-indigo-500/30 transition-colors">
                 <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                   <AlertCircle className="w-16 h-16 text-yellow-500" />
@@ -514,25 +647,47 @@ const App: React.FC = () => {
                 <span className="text-xs text-slate-500 mt-2">Concluídos total</span>
               </div>
 
-              <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl flex flex-col relative overflow-hidden group hover:border-indigo-500/30 transition-colors">
-                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                  <CheckCircle2 className="w-16 h-16 text-emerald-500" />
+              {(user?.role_id === 6 || user?.role_id === 7) && (
+                <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl flex flex-col relative overflow-hidden group hover:border-indigo-500/30 transition-colors">
+                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                    <CheckCircle2 className="w-16 h-16 text-emerald-500" />
+                  </div>
+                  <span className="text-slate-400 text-sm font-medium uppercase tracking-wider">Fechados por mim</span>
+                  <span className="text-4xl font-bold text-emerald-400 mt-2">{stats.myClosed}</span>
+                  <span className="text-xs text-emerald-600 mt-2">Produtividade pessoal</span>
                 </div>
-                <span className="text-slate-400 text-sm font-medium uppercase tracking-wider">Fechados por mim</span>
-                <span className="text-4xl font-bold text-emerald-400 mt-2">{stats.myClosed}</span>
-                <span className="text-xs text-emerald-600 mt-2">Produtividade pessoal</span>
-              </div>
+              )}
             </div>
-
+            <div className="md:hidden">
+              <MobileTicketList
+                tickets={filteredTickets}
+                onTicketClick={(t) => setDetailsTicket(t)}
+                onChatClick={(t) => setActiveChatTicket(t)}
+                searchValue={searchDesc}
+                onSearchChange={setSearchDesc}
+              />
+            </div>
             {/* Detailed Table */}
-            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg">
-              <div className="px-6 py-4 border-b border-slate-800 flex items-center gap-2 bg-slate-900/50">
-                <Layers className="w-5 h-5 text-indigo-500" />
-                <h2 className="font-semibold text-lg text-white">Todos os Últimos Chamados</h2>
-              </div>
+            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg flex-1 flex flex-col min-h-0">
+              <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/50 shrink-0">
+                <div className="flex items-center gap-2">
+                  <Layers className="w-5 h-5 text-indigo-500" />
+                  <h2 className="font-semibold text-lg text-white">Todos os Últimos Chamados</h2>
+                </div>
 
+                {/* Botão Abrir Chamado */}
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-lg shadow-indigo-500/20 active:scale-95"
+                  title="Abrir Novo Chamado"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden sm:inline">Abrir Chamado</span>
+                </button>
+              </div>
+              {/* Visualização Mobile em Cards (Visível apenas até breakpoint MD) */}
               {/* Barra de Pesquisa e Filtros */}
-              <div className="p-6 bg-slate-900/30 border-b border-slate-800 flex flex-col md:flex-row gap-4 items-end">
+              <div className="p-6 bg-slate-900/30 border-b border-slate-800 flex flex-col md:flex-row gap-4 items-end shrink-0">
                 {/* Campo de Pesquisa */}
                 <div className="flex-1 w-full relative group">
                   <div className="relative">
@@ -549,120 +704,24 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="flex gap-3 shrink-0">
-                  {/* Filtro Solicitante */}
+                  {/* Botão de Filtros (Abre o Modal) */}
                   <div className="relative">
                     <button
-                      onClick={() => {
-                        setShowSolicitanteDropdown(!showSolicitanteDropdown);
-                        setShowResponsavelDropdown(false);
-                      }}
-                      className={`p-2 rounded-lg border flex items-center gap-2 transition-all ${selectedSolicitante ? 'bg-indigo-600/20 border-indigo-500 text-white' : 'bg-slate-950 border-slate-700 text-slate-400 hover:border-slate-600'
+                      onClick={() => setShowFiltersModal(true)}
+                      className={`p-2 rounded-lg border flex items-center gap-2 transition-all ${(multiFilters.solicitantes.length > 0 || multiFilters.responsaveis.length > 0 || multiFilters.status.length > 0 || multiFilters.prioridades.length > 0)
+                        ? 'bg-indigo-600/20 border-indigo-500 text-white'
+                        : 'bg-slate-950 border-slate-700 text-slate-400 hover:border-slate-600'
                         }`}
-                      title="Filtrar por Solicitante"
+                      title="Abrir Filtros"
                     >
-                      <User className="w-5 h-5" />
-                      <ChevronDown className={`w-3 h-3 transition-transform ${showSolicitanteDropdown ? 'rotate-180' : ''}`} />
+                      <List className="w-5 h-5" />
+                      {(multiFilters.solicitantes.length + multiFilters.responsaveis.length + multiFilters.status.length + multiFilters.prioridades.length) > 0 && (
+                        <span className="absolute -top-1 -right-1 bg-indigo-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold border border-slate-900">
+                          {multiFilters.solicitantes.length + multiFilters.responsaveis.length + multiFilters.status.length + multiFilters.prioridades.length}
+                        </span>
+                      )}
+                      <span className="text-xs font-bold hidden sm:inline">Filtros</span>
                     </button>
-
-                    {showSolicitanteDropdown && (
-                      <div className="absolute right-0 mt-2 w-56 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-                        <div className="p-2 border-b border-slate-700 bg-slate-800/50">
-                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest px-2">Solicitantes</span>
-                        </div>
-                        <div className="max-h-60 overflow-y-auto py-1 custom-scrollbar">
-                          <button
-                            onClick={() => {
-                              setSelectedSolicitante(null);
-                              setShowSolicitanteDropdown(false);
-                            }}
-                            className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 flex items-center justify-between"
-                          >
-                            Todos
-                            {!selectedSolicitante && <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />}
-                          </button>
-                          {uniqueSolicitantes.map(name => (
-                            <button
-                              key={name}
-                              onClick={() => {
-                                setSelectedSolicitante(name);
-                                setShowSolicitanteDropdown(false);
-                              }}
-                              className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-3 group/item transition-colors"
-                            >
-                              <div className="flex-1 flex items-center gap-3 overflow-hidden">
-                                {userImgMap[name] ? (
-                                  <img src={userImgMap[name]} alt={name} className="w-6 h-6 rounded-full object-cover border border-slate-600 shadow-sm" />
-                                ) : (
-                                  <div className="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-400 border border-slate-600 group-hover/item:border-indigo-500/50 transition-colors">
-                                    {name.charAt(0).toUpperCase()}
-                                  </div>
-                                )}
-                                <span className="truncate">{name}</span>
-                              </div>
-                              {selectedSolicitante === name && <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Filtro Responsável */}
-                  <div className="relative">
-                    <button
-                      onClick={() => {
-                        setShowResponsavelDropdown(!showResponsavelDropdown);
-                        setShowSolicitanteDropdown(false);
-                      }}
-                      className={`p-2 rounded-lg border flex items-center gap-2 transition-all ${selectedResponsavel ? 'bg-indigo-600/20 border-indigo-500 text-white' : 'bg-slate-950 border-slate-700 text-slate-400 hover:border-slate-600'
-                        }`}
-                      title="Filtrar por Responsável"
-                    >
-                      <Monitor className="w-5 h-5" />
-                      <ChevronDown className={`w-3 h-3 transition-transform ${showResponsavelDropdown ? 'rotate-180' : ''}`} />
-                    </button>
-
-                    {showResponsavelDropdown && (
-                      <div className="absolute right-0 mt-2 w-56 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-                        <div className="p-2 border-b border-slate-700 bg-slate-800/50">
-                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest px-2">Responsáveis</span>
-                        </div>
-                        <div className="max-h-60 overflow-y-auto py-1 custom-scrollbar">
-                          <button
-                            onClick={() => {
-                              setSelectedResponsavel(null);
-                              setShowResponsavelDropdown(false);
-                            }}
-                            className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 flex items-center justify-between"
-                          >
-                            Todos
-                            {!selectedResponsavel && <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />}
-                          </button>
-                          {uniqueResponsaveis.map(name => (
-                            <button
-                              key={name}
-                              onClick={() => {
-                                setSelectedResponsavel(name);
-                                setShowResponsavelDropdown(false);
-                              }}
-                              className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-3 group/item transition-colors"
-                            >
-                              <div className="flex-1 flex items-center gap-3 overflow-hidden">
-                                {userImgMap[name] ? (
-                                  <img src={userImgMap[name]} alt={name} className="w-6 h-6 rounded-full object-cover border border-slate-600 shadow-sm" />
-                                ) : (
-                                  <div className="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-400 border border-slate-600 group-hover/item:border-indigo-500/50 transition-colors">
-                                    {name.charAt(0).toUpperCase()}
-                                  </div>
-                                )}
-                                <span className="truncate">{name}</span>
-                              </div>
-                              {selectedResponsavel === name && <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                   </div>
 
                   {/* Filtro Data */}
@@ -670,8 +729,6 @@ const App: React.FC = () => {
                     <button
                       onClick={() => {
                         setShowDateDropdown(!showDateDropdown);
-                        setShowSolicitanteDropdown(false);
-                        setShowResponsavelDropdown(false);
                       }}
                       className={`p-2 rounded-lg border flex items-center gap-2 transition-all ${(dateStart || dateEnd) ? 'bg-indigo-600/20 border-indigo-500 text-white' : 'bg-slate-950 border-slate-700 text-slate-400 hover:border-slate-600'
                         }`}
@@ -733,15 +790,9 @@ const App: React.FC = () => {
                   </div>
 
                   {/* Botão Limpar Filtros (se houver filtros ativos) */}
-                  {(searchDesc || selectedSolicitante || selectedResponsavel || dateStart || dateEnd) && (
+                  {(searchDesc || multiFilters.solicitantes.length > 0 || multiFilters.responsaveis.length > 0 || multiFilters.status.length > 0 || multiFilters.prioridades.length > 0 || dateStart || dateEnd) && (
                     <button
-                      onClick={() => {
-                        setSearchDesc('');
-                        setSelectedSolicitante(null);
-                        setSelectedResponsavel(null);
-                        setDateStart('');
-                        setDateEnd('');
-                      }}
+                      onClick={clearAllFilters}
                       className="p-2 text-slate-500 hover:text-red-400 transition-colors"
                       title="Limpar Filtros"
                     >
@@ -749,23 +800,28 @@ const App: React.FC = () => {
                     </button>
                   )}
                 </div>
+
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-950/50 text-slate-400 text-xs uppercase font-semibold">
+              <div className="flex-1 overflow-auto custom-scrollbar">
+                {/* Visualização Desktop em Tabela (Visível de MD pra cima) */}
+                <table className="hidden md:table w-full text-left border-collapse relative">
+                  <thead className="sticky top-0 z-10 bg-slate-950">
+                    <tr className="bg-slate-950/90 text-slate-400 text-xs uppercase font-semibold backdrop-blur-sm">
                       <th className="px-6 py-4">ID</th>
                       <th className="px-6 py-4">Título</th>
                       <th className="px-6 py-4">Solicitante</th>
                       <th className="px-6 py-4">Responsável</th>
                       <th className="px-6 py-4 whitespace-nowrap">Solicitado em</th>
                       <th className="px-6 py-4 whitespace-nowrap">Resolvido em</th>
+                      <th className="px-6 py-4">Prioridade</th>
                       <th className="px-6 py-4">Status</th>
-                      <th className="px-6 py-4">Ação</th>
+                      {(user?.role_id === 6 || user?.role_id === 7 || user?.db_id) && (
+                        <th className="px-6 py-4">Ação</th>
+                      )}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800">
+                  <tbody className="divide-y divide-slate-800 h-16">
                     {filteredTickets.length === 0 ? (
                       <tr>
                         <td colSpan={7} className="px-6 py-8 text-center text-slate-500">
@@ -800,6 +856,18 @@ const App: React.FC = () => {
                             {t.conclued_at ? format(new Date(t.conclued_at), "dd/MM/yyyy HH:mm", { locale: ptBR }) : '-'}
                           </td>
                           <td className="px-6 py-4">
+                            <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase border ${slas.find(s => Number(s.id) === Number(t.sla_id))?.status === 'Alta'
+                              ? 'bg-red-500/10 text-red-500 border-red-500/20'
+                              : slas.find(s => Number(s.id) === Number(t.sla_id))?.status === 'Média'
+                                ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
+                                : slas.find(s => Number(s.id) === Number(t.sla_id))?.status === 'Baixa'
+                                  ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                                  : 'bg-slate-800 text-slate-300 border-slate-700'
+                              }`}>
+                              {slas.find(s => Number(s.id) === Number(t.sla_id))?.status || '-'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
                             <span className={`px-2 py-1 rounded-full text-[10px] uppercase font-bold border whitespace-nowrap inline-flex items-center justify-center ${t.status === 'Concluído' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
                               t.status === 'Em andamento' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' :
                                 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
@@ -807,20 +875,70 @@ const App: React.FC = () => {
                               {t.status || 'Novo'}
                             </span>
                           </td>
-                          <td className="px-6 py-4">
-                            <button
-                              onClick={(e) => {
-                                // Interrompe a propagação para não abrir os detalhes
-                                e.stopPropagation();
-                                // Abre o chat
-                                setActiveChatTicket(t);
-                              }}
-                              className="p-2 bg-slate-800 rounded-lg hover:bg-indigo-600 hover:text-white text-slate-400 transition-colors"
-                              title="Abrir Chat"
-                            >
-                              <MessageSquare className="w-4 h-4" />
-                            </button>
-                          </td>
+                          {(t.solicitante_id === user?.db_id || user?.role_id === 6 || user?.role_id === 7) && (
+                            <td className="px-6 py-4">
+                              <div className="relative">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenDropdownId(openDropdownId === t.id ? null : t.id);
+                                  }}
+                                  className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 transition-colors"
+                                >
+                                  <MoreVertical className="w-4 h-4" />
+                                </button>
+
+                                {openDropdownId === t.id && (
+                                  <div className="absolute right-0 mt-2 w-48 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                                    <div className="py-1">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setActiveChatTicket(t);
+                                          setOpenDropdownId(null);
+                                        }}
+                                        className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-2"
+                                      >
+                                        <MessageSquare className="w-4 h-4 text-indigo-400" />
+                                        Abrir Chat
+                                      </button>
+
+                                      {(user?.role_id === 6 || user?.role_id === 7) && (
+                                        <>
+                                          <div className="h-px bg-slate-700 my-1" />
+                                          {t.status !== 'Concluído' ? (
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleFinalizeTicket(t.id);
+                                                setOpenDropdownId(null);
+                                              }}
+                                              className="w-full text-left px-4 py-2 text-sm text-emerald-400 hover:bg-slate-700 flex items-center gap-2"
+                                            >
+                                              <CheckCircle2 className="w-4 h-4" />
+                                              Finalizar Chamado
+                                            </button>
+                                          ) : (
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleAcceptTicket(t.id);
+                                                setOpenDropdownId(null);
+                                              }}
+                                              className="w-full text-left px-4 py-2 text-sm text-indigo-400 hover:bg-slate-700 flex items-center gap-2"
+                                            >
+                                              <Loader2 className="w-4 h-4" />
+                                              Reabrir Chamado
+                                            </button>
+                                          )}
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          )}
                         </tr>
                       ))
                     )}
@@ -831,14 +949,54 @@ const App: React.FC = () => {
 
           </div>
         </main>
+      )}
+
+        {/* Overlay do Mobile */}
+        {showMobileQueue && (
+          <div
+            className="md:hidden absolute inset-0 bg-black/60 z-40 backdrop-blur-sm"
+            onClick={() => setShowMobileQueue(false)}
+          />
+        )}
 
         {/* Right Sidebar - Queue (Maintained) */}
-        <aside className="w-[400px] shrink-0 bg-slate-900/50 flex flex-col border-l border-slate-800">
-          <div className="p-4 border-b border-slate-800 bg-slate-900 sticky top-0 z-10 flex justify-between items-center h-16 shrink-0">
-            <h2 className="font-semibold text-slate-200">Fila de Chamados</h2>
-            <span className="bg-slate-800 text-slate-400 px-2 py-1 rounded text-xs">
-              {tickets.length} total
-            </span>
+        <aside className={`
+          absolute md:relative top-0 right-0 h-full w-[85%] max-w-[340px] md:max-w-none md:w-[400px] 
+          shrink-0 flex flex-col border-l border-slate-800 bg-slate-950 md:bg-slate-900/50 
+          transition-transform duration-300 z-50
+          ${showMobileQueue ? 'translate-x-0 shadow-2xl' : 'translate-x-full md:translate-x-0'}
+        `}>
+          <div className="p-2 border-b border-slate-800 bg-slate-900 sticky top-0 z-10 flex flex-col gap-2 shrink-0">
+            <div className="flex justify-between items-center px-2 py-1">
+              <h2 className="font-semibold text-slate-200 text-sm">Central de Chamados</h2>
+              <button
+                onClick={() => setShowMobileQueue(false)}
+                className="md:hidden p-1.5 hover:bg-slate-800 rounded-md text-slate-400 hover:text-red-400 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800">
+              <button
+                onClick={() => setActiveSidebarTab('queue')}
+                className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${activeSidebarTab === 'queue'
+                  ? 'bg-slate-800 text-white shadow-sm'
+                  : 'text-slate-500 hover:text-slate-300'
+                  }`}
+              >
+                Fila ({tickets.length})
+              </button>
+              <button
+                onClick={() => setActiveSidebarTab('myTickets')}
+                className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${activeSidebarTab === 'myTickets'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-500 hover:text-slate-300'
+                  }`}
+              >
+                Meus Chamados ({tickets.filter(t => t.solicitante_id === user?.db_id).length})
+              </button>
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
@@ -847,12 +1005,15 @@ const App: React.FC = () => {
                 <Loader2 className="w-5 h-5 animate-spin" />
                 <span>Carregando...</span>
               </div>
-            ) : tickets.length === 0 ? (
+            ) : (activeSidebarTab === 'queue' ? tickets : tickets.filter(t => t.solicitante_id === user?.db_id)).length === 0 ? (
               <div className="text-center py-10 text-slate-500 text-sm">
-                Nenhum chamado registrado.
+                {activeSidebarTab === 'queue' ? 'Nenhum chamado registrado.' : 'Você não possui chamados em andamento ou finalizados.'}
               </div>
             ) : (
-              tickets.map((ticket) => (
+              (activeSidebarTab === 'queue'
+                ? tickets
+                : tickets.filter(t => t.solicitante_id === user?.db_id && (t.status === 'Em andamento' || t.status === 'Concluído' || t.status === 'Novo'))
+              ).map((ticket) => (
                 <TicketCard
                   key={ticket.id}
                   ticket={ticket}
@@ -871,6 +1032,20 @@ const App: React.FC = () => {
         </aside>
 
       </div>
+
+      <FiltersModal
+        isOpen={showFiltersModal}
+        onClose={() => setShowFiltersModal(false)}
+        filters={multiFilters}
+        onToggleFilter={toggleMultiFilter}
+        onClear={clearAllFilters}
+        uniqueValues={{
+          solicitantes: uniqueSolicitantes,
+          responsaveis: uniqueResponsaveis,
+          statuses: uniqueStatuses,
+          prioridades: uniquePrioridades
+        }}
+      />
     </div>
   );
 };
