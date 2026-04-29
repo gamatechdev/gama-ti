@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
+import { toast } from 'sonner';
 import { X, Save, Loader2, Tag, FileText, Layout, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
 import { UserSession, Chamado, Category } from '../types';
 
@@ -51,37 +52,49 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({ ticket, user, 
       return;
     }
 
-    setLoading(true);
+    setLoading(true); // Ativa o estado de carregamento no botão de salvar
     try {
+      // Busca o objeto da categoria para obter o SLA atualizado se necessário
       const categoriaObj = categorias.find(c => c.id === Number(selectedCategoriaId));
-      
+
+      // Prepara o objeto de atualização
       const updateData: any = {
-        titulo,
-        descricao,
-        status,
-        categorie_id: selectedCategoriaId,
-        sla_id: categoriaObj?.sla_id,
+        titulo, // Título atualizado
+        descricao, // Descrição atualizada
+        status, // Status atualizado (Aberto, Em andamento, Concluído)
+        categorie_id: selectedCategoriaId, // ID da categoria atualizada
+        sla_id: categoriaObj?.sla_id, // SLA vinculado à nova categoria selecionada
       };
 
-      // Se mudar para concluído e não tiver data de conclusão, define agora
+      // Se o status for alterado para 'Concluído', registra a data de finalização
       if (status === 'Concluído' && !ticket.conclued_at) {
-        updateData.conclued_at = new Date().toISOString();
+        updateData.conclued_at = new Date().toISOString(); // Define o timestamp atual
       }
 
-      const { error } = await supabase
+      // Realiza a atualização na tabela 'chamados' do banco de dados
+      const { data, error } = await supabase
         .from('chamados')
         .update(updateData)
-        .eq('id', ticket.id);
+        .eq('id', ticket.id) // Filtra pelo ID do chamado atual
+        .select();
 
-      if (error) throw error;
+      if (error) throw error; // Lança exceção em caso de erro no banco
 
-      onSuccess();
-      onClose();
+      // Log para depuração: confirma se os dados foram realmente alterados no banco
+      console.log("[DEBUG] Chamado atualizado:", data);
+
+      // Exibe notificação de sucesso
+      toast.success('Chamado atualizado com sucesso!');
+
+      onSuccess(); // Executa o callback de sucesso (atualiza a lista global)
+      onClose(); // Fecha o modal de edição
     } catch (err) {
+      // Loga o erro detalhado no console para análise técnica
       console.error('Erro ao atualizar chamado:', err);
-      alert('Erro ao atualizar chamado. Tente novamente.');
+      // Notifica o usuário sobre a falha na operação
+      toast.error('Erro ao atualizar chamado. Tente novamente.');
     } finally {
-      setLoading(false);
+      setLoading(false); // Desativa o carregamento do botão
     }
   };
 
@@ -161,11 +174,10 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({ ticket, user, 
                     type="button"
                     disabled={!canEditStatus}
                     onClick={() => setStatus(opt.value)}
-                    className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border transition-all ${
-                      isSelected 
-                        ? 'bg-slate-800 border-amber-500 text-white shadow-lg' 
-                        : 'bg-slate-950 border-slate-700 text-slate-500 hover:border-slate-600'
-                    } ${!canEditStatus ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border transition-all ${isSelected
+                      ? 'bg-slate-800 border-amber-500 text-white shadow-lg'
+                      : 'bg-slate-950 border-slate-700 text-slate-500 hover:border-slate-600'
+                      } ${!canEditStatus ? 'opacity-50 cursor-not-allowed' : ''}`}
                     title={!canEditStatus ? "Apenas técnicos podem alterar o status" : ""}
                   >
                     <Icon className={`w-4 h-4 ${isSelected ? opt.color : ''}`} />

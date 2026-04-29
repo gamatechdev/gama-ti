@@ -39,6 +39,7 @@ import { useScreenWidth } from './utils/useScreenWidth';
 import { Sidebar } from './components/features/Sidebar';
 import { CategoriesManager } from './components/features/CategoriesManager';
 import { FiltersModal, MultiFilters } from './components/local/FiltersModal';
+import { Toaster, toast } from 'sonner';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<UserSession | null>(null);
@@ -315,30 +316,36 @@ const App: React.FC = () => {
     setNewTicket(current => (current?.id === id ? null : current)); // Close modal immediately
 
     try {
-      // 2. Perform DB Update
-      await checkSession();
+      // 2. Executa a atualização no banco de dados para marcar o responsável e status
+      await checkSession(); // Garante que a sessão do usuário está ativa
       const { error } = await supabase
         .from('chamados')
         .update({
-          responsavel: user.name,
-          responsavel_id: user.id, // Using UUID
-          status: 'Em andamento'
+          responsavel: user.name, // Nome do técnico que aceitou
+          responsavel_id: user.id, // ID (UUID) do técnico
+          status: 'Em andamento' // Novo status do chamado
         })
-        .eq('id', id);
+        .eq('id', id); // Filtra pelo ID do chamado específico
 
-      if (error) throw error;
+      if (error) throw error; // Lança erro se a atualização falhar
+
+      // Exibe notificação de sucesso ao aceitar o chamado
+      toast.success('Você aceitou o chamado com sucesso!');
 
     } catch (err: any) {
+      // Loga o erro no console para rastreamento técnico
       console.error("Error accepting ticket:", err);
-      // Rollback UI on error
+      // Reverte a interface (rollback) em caso de erro na rede ou banco
       setTickets(previousTickets);
-      alert("Erro ao aceitar chamado. Verifique sua conexão.");
+      // Notifica o usuário sobre a falha na aceitação
+      toast.error("Erro ao aceitar chamado. Verifique sua conexão.");
 
+      // Se o erro for de sessão expirada, realiza o logout automático
       if (err.message?.includes("Sessão expirada") || err.message?.includes("JWT")) {
-        handleLogout(); // O handleLogout modificado limpa cache
+        handleLogout(); // Limpa a sessão e redireciona para o login
       }
     } finally {
-      setProcessingId(null);
+      setProcessingId(null); // Libera o estado de processamento do card
     }
   };
 
@@ -351,25 +358,31 @@ const App: React.FC = () => {
     setTickets(prev => prev.map(t => t.id === id ? { ...t, status: 'Concluído', conclued_at: now } : t));
 
     try {
-      // 2. Perform DB Update
-      await checkSession();
+      // 2. Executa a atualização no banco de dados para finalizar o chamado
+      await checkSession(); // Verifica validade da sessão
       const { error } = await supabase
         .from('chamados')
-        .update({ status: 'Concluído', conclued_at: now })
-        .eq('id', id);
+        .update({ status: 'Concluído', conclued_at: now }) // Define status e data de conclusão
+        .eq('id', id); // Filtra pelo ID do chamado
 
-      if (error) throw error;
+      if (error) throw error; // Lança exceção se houver erro no banco
+
+      // Notifica o sucesso da finalização
+      toast.success('Chamado finalizado com sucesso!');
     } catch (err: any) {
+      // Loga a falha para análise técnica
       console.error("Error finalizing:", err);
-      // Rollback
+      // Reverte o estado da UI para o valor anterior à atualização otimista
       setTickets(previousTickets);
-      alert("Erro ao finalizar chamado.");
+      // Informa o usuário sobre o erro
+      toast.error("Erro ao finalizar chamado. Tente novamente.");
 
+      // Trata expiração de sessão
       if (err.message?.includes("Sessão expirada") || err.message?.includes("JWT")) {
-        handleLogout();
+        handleLogout(); // Desloga o usuário
       }
     } finally {
-      setProcessingId(null);
+      setProcessingId(null); // Reseta o estado de carregamento do botão
     }
   };
 
@@ -519,6 +532,7 @@ const App: React.FC = () => {
 
   return (
     <div className="h-screen bg-slate-950 flex flex-col overflow-hidden text-slate-200 font-sans relative">
+      <Toaster position="top-right" richColors />
       {/* Modals */}
       {newTicket && (
         <NewTicketModal

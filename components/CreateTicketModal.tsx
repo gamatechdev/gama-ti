@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
+import { toast } from 'sonner';
 import { X, Plus, Loader2, Tag, FileText, Layout, Check } from 'lucide-react';
 import { UserSession } from '../types';
 
@@ -56,38 +57,41 @@ export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({ user, onCl
       return;
     }
 
-    setLoading(true);
+    setLoading(true); // Ativa o estado de carregamento do botão
     try {
-      // Busca o nome da categoria selecionada para salvar no chamado (se necessário)
-      const categoriaObj = categorias.find(c => c.id === Number(selectedCategoria));
-
+      // Tenta inserir o novo chamado na tabela 'chamados' do banco de dados
       const { error } = await supabase
         .from('chamados')
         .insert([
           {
-            titulo,
-            descricao,
-            solicitante: user.name,
-            status: 'Não iniciado',
-            responsavel: 'Arthur Silva',
-            solicitante_id: user.db_id,
-            responsavel_id: '92b01c3c-af11-4d37-bb30-087f828e6d48',
-            ti_leu: false,
-            categorie_id: selectedCategoria?.id,
-            sla_id: selectedCategoria?.sla_id,
-            created_at: new Date().toISOString(),
+            titulo, // Título fornecido pelo usuário
+            descricao, // Descrição detalhada do problema
+            solicitante: user.name, // Nome do usuário logado
+            status: 'Não iniciado', // Status inicial padrão
+            responsavel: 'Arthur Silva', // Responsável fixo para triagem (exemplo)
+            solicitante_id: user.db_id, // ID numérico do solicitante
+            responsavel_id: '92b01c3c-af11-4d37-bb30-087f828e6d48', // UUID do responsável fixo
+            ti_leu: false, // Marca que a equipe técnica ainda não visualizou
+            categorie_id: selectedCategoria?.id, // ID da categoria selecionada
+            sla_id: selectedCategoria?.sla_id, // ID do SLA vinculado à categoria
+            created_at: new Date().toISOString(), // Data e hora da criação
           }
         ]);
 
-      if (error) throw error;
+      if (error) throw error; // Lança erro se a requisição ao Supabase falhar
 
-      onSuccess();
-      onClose();
+      // Exibe notificação de sucesso para o usuário
+      toast.success('Chamado aberto com sucesso!');
+      
+      onSuccess(); // Executa o callback de sucesso (ex: atualizar lista)
+      onClose(); // Fecha o modal
     } catch (err) {
+      // Loga o erro detalhado no console para depuração
       console.error('Erro ao criar chamado:', err);
-      alert('Erro ao criar chamado. Tente novamente.');
+      // Exibe notificação de erro amigável para o usuário
+      toast.error('Ocorreu um erro ao abrir o chamado. Tente novamente.');
     } finally {
-      setLoading(false);
+      setLoading(false); // Desativa o estado de carregamento do botão
     }
   };
   useEffect(() => {
