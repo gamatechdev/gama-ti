@@ -8,7 +8,8 @@ import {
   ChevronRight,
   ShieldCheck,
   UserCircle,
-  Library
+  Library,
+  Clock
 } from 'lucide-react';
 import { UserSession } from '../../types';
 
@@ -32,6 +33,7 @@ export function Sidebar({
   const menuItems = [
     { id: 'chamados', label: 'Chamados', icon: Ticket, roles: [1, 2, 3, 4, 5, 6, 7] },
     { id: 'categories', label: 'Categorias', icon: Library, roles: [6, 7] },
+    { id: 'sla', label: 'SLA', icon: Clock, roles: [6, 7] },
   ];
 
   // Filtra itens baseado na role do usuário

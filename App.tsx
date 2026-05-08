@@ -38,6 +38,7 @@ import { ptBR } from 'date-fns/locale/pt-BR';
 import { useScreenWidth } from './utils/useScreenWidth';
 import { Sidebar } from './components/features/Sidebar';
 import { CategoriesManager } from './components/features/CategoriesManager';
+import { SlaManager } from './components/features/SlaManager';
 import { FiltersModal, MultiFilters } from './components/local/FiltersModal';
 import { Toaster, toast } from 'sonner';
 
@@ -638,6 +639,8 @@ const App: React.FC = () => {
         {/* Área de Conteúdo Principal */}
         {mainTab === 'categories' ? (
           <CategoriesManager />
+        ) : mainTab === 'sla' ? (
+          <SlaManager />
         ) : (
           /* Dashboard Area (Center/Left) */
           <main className="flex-1 overflow-y-auto bg-slate-950 p-8 flex flex-col">

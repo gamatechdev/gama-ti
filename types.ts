@@ -37,3 +37,12 @@ export interface Category {
   descricao: string | null;
   sla_id: number | null;
 }
+
+export interface SLA {
+  id: number;
+  nome: string;
+  status: string;
+  deadline_hours: number;
+  descricao: string | null;
+  created_at?: string;
+}
