@@ -89,7 +89,7 @@ export function SlaManager() { // Componente Organism para gerenciar SLAs
           .from('sla')
           .update(payload)
           .eq('id', editingSla.id);
-        
+
         if (error) throw error;
         toast.success('SLA atualizado com sucesso!');
       } else {
@@ -97,7 +97,7 @@ export function SlaManager() { // Componente Organism para gerenciar SLAs
         const { error } = await supabase
           .from('sla')
           .insert([payload]);
-        
+
         if (error) throw error;
         toast.success('Novo SLA criado com sucesso!');
       }
@@ -127,7 +127,7 @@ export function SlaManager() { // Componente Organism para gerenciar SLAs
   };
 
   // Filtro de pesquisa local
-  const filteredSlas = slas.filter(s => 
+  const filteredSlas = slas.filter(s =>
     s.status.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (s.descricao && s.descricao.toLowerCase().includes(searchTerm.toLowerCase()))
   );
@@ -198,11 +198,10 @@ export function SlaManager() { // Componente Organism para gerenciar SLAs
                   <tr key={sla.id} className="hover:bg-slate-800/30 transition-colors group">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className={`w-2 h-2 rounded-full ${
-                          sla.status.toLowerCase().includes('alta') || sla.status.toLowerCase().includes('crítica') ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' :
+                        <div className={`w-2 h-2 rounded-full ${sla.status.toLowerCase().includes('alta') || sla.status.toLowerCase().includes('crítica') ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' :
                           sla.status.toLowerCase().includes('média') ? 'bg-yellow-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]' :
-                          'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]'
-                        }`} />
+                            'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]'
+                          }`} />
                         <div className="flex flex-col">
                           <span className="text-slate-200 font-semibold">{sla.nome}</span>
                           <span className="text-[10px] text-slate-500 uppercase tracking-wider">{sla.status}</span>

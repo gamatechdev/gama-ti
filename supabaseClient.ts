@@ -1,6 +1,10 @@
+// Importa a função createClient do SDK do Supabase
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = 'https://wofipjazcxwxzzxjsflh.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndvZmlwamF6Y3h3eHp6eGpzZmxoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg4MDA2NjcsImV4cCI6MjA3NDM3NjY2N30.gKjTEhXbrvRxKcn3cNvgMlbigXypbshDWyVaLqDjcpQ';
+// Obtém a URL do projeto Supabase das variáveis de ambiente do Vite
+const SUPABASE_URL = import.meta.env.VITE_API_SUPABASE_URL;
+// Obtém a chave anônima do projeto Supabase das variáveis de ambiente do Vite
+const SUPABASE_ANON_KEY = import.meta.env.VITE_API_ANON_KEY;
 
+// Cria uma única instância do cliente Supabase para ser exportada e usada em toda a aplicação
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
