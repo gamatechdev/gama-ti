@@ -19,7 +19,7 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({ ticket, user, 
   // Estados do formulário baseados no chamado atual
   const [titulo, setTitulo] = useState(ticket.titulo || '');
   const [descricao, setDescricao] = useState(ticket.descricao || '');
-  const [status, setStatus] = useState(ticket.status || 'Não iniciado');
+  const [status, setStatus] = useState(ticket.status || 'Em Aberto');
   const [selectedCategoriaId, setSelectedCategoriaId] = useState<number | undefined>(ticket.categorie_id || undefined);
 
   // Verifica se o usuário pode editar o status (apenas Role 6 ou 7)
@@ -99,8 +99,7 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({ ticket, user, 
   };
 
   const statusOptions = [
-    { value: 'Não iniciado', label: 'Não iniciado', icon: AlertCircle, color: 'text-red-400' },
-    { value: 'Em Aberto', label: 'Em Aberto', icon: Clock, color: 'text-amber-400' },
+    { value: 'Em Aberto', label: 'Em Aberto', icon: AlertCircle, color: 'text-red-400' },
     { value: 'Em andamento', label: 'Em andamento', icon: Clock, color: 'text-indigo-400' },
     { value: 'Concluído', label: 'Concluído', icon: CheckCircle2, color: 'text-emerald-400' },
   ];
@@ -167,7 +166,7 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({ ticket, user, 
             <div className="grid grid-cols-3 gap-2">
               {statusOptions.map((opt) => {
                 const Icon = opt.icon;
-                const isSelected = status === opt.value;
+                const isSelected = status?.toLowerCase() === opt.value.toLowerCase();
                 return (
                   <button
                     key={opt.value}

@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
-import { Chamado, UserSession } from './types';
+import { Chamado, UserSession, SLA } from './types';
 import { TicketCard } from './components/TicketCard';
 import { NewTicketModal } from './components/NewTicketModal';
 import { TicketChatModal } from './components/TicketChatModal';
@@ -53,7 +53,15 @@ const App: React.FC = () => {
   const [editingTicket, setEditingTicket] = useState<Chamado | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
-  const [slas, setSlas] = useState<any[]>([]);
+  const [slas, setSlas] = useState<SLA[]>([]);
+
+  // Map para busca rápida de SLAs por ID (evita slas.find no render/memos)
+  const slaMap = useMemo(() => {
+    return slas.reduce((acc, sla) => {
+      acc[sla.id] = sla;
+      return acc;
+    }, {} as Record<number, SLA>);
+  }, [slas]);
 
   // Estados para Busca e Filtros
   const [searchDesc, setSearchDesc] = useState('');
@@ -190,39 +198,40 @@ const App: React.FC = () => {
   }, []);
 
   // --- SLAs Data ---
-  useEffect(() => {
-    const fetchSLAs = async () => {
-      try {
-        const { data, error } = await supabase.from('sla').select('*');
-        if (!error && data) setSlas(data);
-      } catch (err) {
-        console.error('Error fetching SLAs:', err);
-      }
-    };
-    fetchSLAs();
+  const fetchSLAs = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.from('sla').select('*');
+      if (!error && data) setSlas(data);
+    } catch (err) {
+      console.error('Error fetching SLAs:', err);
+    }
   }, []);
 
+  useEffect(() => {
+    fetchSLAs();
+  }, [fetchSLAs]);
+
   // --- Tickets Data & Realtime ---
+  const fetchTickets = useCallback(async () => {
+    if (!user) return;
+    setLoadingTickets(true);
+    try {
+      const { data, error } = await supabase
+        .from('chamados')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      if (data) setTickets(data);
+    } catch (err) {
+      console.error('Error fetching tickets:', err);
+    } finally {
+      setLoadingTickets(false);
+    }
+  }, [user]);
+
   useEffect(() => {
     if (!user) return;
-
-    const fetchTickets = async () => {
-      setLoadingTickets(true);
-      try {
-        const { data, error } = await supabase
-          .from('chamados')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        if (data) setTickets(data);
-      } catch (err) {
-        console.error('Error fetching tickets:', err);
-      } finally {
-        setLoadingTickets(false);
-      }
-    };
-
     fetchTickets();
 
     const channel = supabase
@@ -278,7 +287,16 @@ const App: React.FC = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.id]);
+  }, [user?.id, fetchTickets]);
+
+  const handleTabChange = (tab: string) => {
+    setMainTab(tab);
+    if (tab === 'chamados') {
+      fetchTickets();
+    } else if (tab === 'sla') {
+      fetchSLAs();
+    }
+  };
 
   // --- Actions ---
   const handleLogout = async () => {
@@ -311,7 +329,7 @@ const App: React.FC = () => {
     // 1. Optimistic Update (Immediate UI feedback)
     const previousTickets = [...tickets]; // Backup for rollback
     const optimisticUpdate = (t: Chamado) =>
-      t.id === id ? { ...t, status: 'Em andamento', responsavel: user.name, responsavel_id: user.id } : t;
+      t.id === id ? { ...t, status: 'Em Aberto', responsavel: user.name, responsavel_id: user.id } : t;
 
     setTickets(prev => prev.map(optimisticUpdate));
     setNewTicket(current => (current?.id === id ? null : current)); // Close modal immediately
@@ -324,7 +342,7 @@ const App: React.FC = () => {
         .update({
           responsavel: user.name, // Nome do técnico que aceitou
           responsavel_id: user.id, // ID (UUID) do técnico
-          status: 'Em andamento' // Novo status do chamado
+          status: 'Em Aberto' // Novo status do chamado
         })
         .eq('id', id); // Filtra pelo ID do chamado específico
 
@@ -414,11 +432,11 @@ const App: React.FC = () => {
   }, [tickets]);
 
   const uniqueStatuses = useMemo(() => {
-    return Array.from(new Set(tickets.map(t => t.status || 'Novo'))).sort();
+    return Array.from(new Set(tickets.map(t => t.status || 'Em Aberto'))).sort();
   }, [tickets]);
 
   const uniquePrioridades = useMemo(() => {
-    return Array.from(new Set(tickets.map(t => slas.find(s => Number(s.id) === Number(t.sla_id))?.status || '-'))).filter(p => p !== '-').sort();
+    return Array.from(new Set(tickets.map(t => (t.sla_id ? slaMap[t.sla_id]?.status : '-')))).filter(p => p !== '-').sort();
   }, [tickets, slas]);
 
   // Busca imagens de perfil para todos os usuários únicos nos filtros
@@ -471,9 +489,9 @@ const App: React.FC = () => {
       // Filtros Multi-seleção (Modal)
       const matchSolicitante = multiFilters.solicitantes.length === 0 || multiFilters.solicitantes.includes(t.solicitante || '');
       const matchResponsavel = multiFilters.responsaveis.length === 0 || multiFilters.responsaveis.includes(t.responsavel || '');
-      const matchStatus = multiFilters.status.length === 0 || multiFilters.status.includes(t.status || 'Novo');
+      const matchStatus = multiFilters.status.length === 0 || multiFilters.status.includes(t.status || 'Em Aberto');
 
-      const ticketSlaName = slas.find(s => Number(s.id) === Number(t.sla_id))?.status || '';
+      const ticketSlaName = t.sla_id ? slaMap[t.sla_id]?.status || '' : '';
       const matchPrioridade = multiFilters.prioridades.length === 0 || multiFilters.prioridades.includes(ticketSlaName);
 
       // Filtro Data
@@ -630,7 +648,7 @@ const App: React.FC = () => {
           <Sidebar
             user={user}
             activeTab={mainTab}
-            onTabChange={setMainTab}
+            onTabChange={handleTabChange}
             isCollapsed={isSidebarCollapsed}
             onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
           />
@@ -887,24 +905,30 @@ const App: React.FC = () => {
                               {t.conclued_at ? format(new Date(t.conclued_at), "dd/MM/yyyy HH:mm", { locale: ptBR }) : '-'}
                             </td>
                             <td className="px-6 py-4">
-                              <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase border ${slas.find(s => Number(s.id) === Number(t.sla_id))?.status === 'Alta'
-                                ? 'bg-red-500/10 text-red-500 border-red-500/20'
-                                : slas.find(s => Number(s.id) === Number(t.sla_id))?.status === 'Média'
-                                  ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
-                                  : slas.find(s => Number(s.id) === Number(t.sla_id))?.status === 'Baixa'
-                                    ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                                    : 'bg-slate-800 text-slate-300 border-slate-700'
-                                }`}>
-                                {slas.find(s => Number(s.id) === Number(t.sla_id))?.status || '-'}
-                              </span>
+                              {t.sla_id && slaMap[t.sla_id] ? (
+                                <span
+                                  className="px-2 py-1 rounded text-[10px] font-bold uppercase border"
+                                  style={{
+                                    color: slaMap[t.sla_id].cor,
+                                    backgroundColor: slaMap[t.sla_id].background,
+                                    borderColor: `${slaMap[t.sla_id].cor}33`
+                                  }}
+                                >
+                                  {slaMap[t.sla_id].status}
+                                </span>
+                              ) : (
+                                <span className="px-2 py-1 rounded text-[10px] font-bold uppercase border bg-slate-800 text-slate-300 border-slate-700">
+                                  -
+                                </span>
+                              )}
                             </td>
                             <td className="px-6 py-4">
                               <span className={`px-2 py-1 rounded-full text-[10px] uppercase font-bold border whitespace-nowrap inline-flex items-center justify-center ${t.status === 'Concluído' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
                                 t.status === 'Em andamento' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' :
-                                  t.status === 'Não iniciado' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
+                                  t.status === 'Em Aberto' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
                                     'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
                                 }`}>
-                                {t.status || 'Não iniciado'}
+                                {t.status || 'Em Aberto'}
                               </span>
                             </td>
                             {(t.solicitante_id === user?.db_id || Number(user?.role_id) === 6 || Number(user?.role_id) === 7) && (
@@ -1056,7 +1080,7 @@ const App: React.FC = () => {
             ) : (
               (activeSidebarTab === 'queue'
                 ? tickets
-                : tickets.filter(t => t.solicitante_id === user?.db_id && (t.status === 'Em andamento' || t.status === 'Concluído' || t.status === 'Novo'))
+                : tickets.filter(t => t.solicitante_id === user?.db_id && (t.status === 'Em andamento' || t.status === 'Concluído' || t.status === 'Em Aberto'))
               ).map((ticket) => (
                 <TicketCard
                   key={ticket.id}

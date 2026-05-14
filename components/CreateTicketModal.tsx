@@ -67,10 +67,8 @@ export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({ user, onCl
             titulo, // Título fornecido pelo usuário
             descricao, // Descrição detalhada do problema
             solicitante: user.name, // Nome do usuário logado
-            status: 'Não iniciado', // Status inicial padrão
-            responsavel: 'Arthur Silva', // Responsável fixo para triagem (exemplo)
+            status: 'Em Aberto', // Status inicial padrão
             solicitante_id: user.db_id, // ID numérico do solicitante
-            responsavel_id: '92b01c3c-af11-4d37-bb30-087f828e6d48', // UUID do responsável fixo
             ti_leu: false, // Marca que a equipe técnica ainda não visualizou
             categorie_id: selectedCategoria?.id, // ID da categoria selecionada
             sla_id: selectedCategoria?.sla_id, // ID do SLA vinculado à categoria

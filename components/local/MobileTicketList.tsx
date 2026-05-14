@@ -70,13 +70,13 @@ export const MobileTicketList: React.FC<MobileTicketListProps> = ({
 
                 <span
                   className={`px-2 py-1 rounded-full text-[10px] uppercase font-bold border shrink-0 ${t.status === 'Concluído'
-                      ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
-                      : t.status === 'Em andamento'
-                        ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
-                        : 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
+                    ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                    : t.status === 'Em andamento'
+                      ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
+                      : 'bg-red-500/10 text-red-500 border-red-500/20'
                     }`}
                 >
-                  {t.status || 'Novo'}
+                  {t.status || 'Em Aberto'}
                 </span>
               </div>
 

@@ -134,7 +134,7 @@ export function CategoriesManager() { // Define e exporta o componente Categorie
   };
 
   const filteredCategories = categories.filter(c => // Filtra as categorias localmente com base no termo de busca
-    c.nome.toLowerCase().includes(searchTerm.toLowerCase()) // Compara o nome em minúsculo
+    (c.nome || '').toLowerCase().includes(searchTerm.toLowerCase()) // Compara o nome em minúsculo
   );
 
   return (

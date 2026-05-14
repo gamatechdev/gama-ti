@@ -41,10 +41,10 @@ export function FiltersModal({
 
   // Filtra as listas baseadas no input de busca local
   const filteredSolicitantes = uniqueValues.solicitantes.filter(name =>
-    name.toLowerCase().includes(searchSolicitante.toLowerCase())
+    (name || '').toLowerCase().includes((searchSolicitante || '').toLowerCase())
   );
   const filteredResponsaveis = uniqueValues.responsaveis.filter(name =>
-    name.toLowerCase().includes(searchResponsavel.toLowerCase())
+    (name || '').toLowerCase().includes((searchResponsavel || '').toLowerCase())
   );
 
   return (

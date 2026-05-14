@@ -23,10 +23,9 @@ export function SlaManager() { // Componente Organism para gerenciar SLAs
 
   // Estado dos campos do formulário
   const [formData, setFormData] = useState({
-    nome: '', // Nome amigável do SLA
-    status: '', // Nível de prioridade (Alta, Média, Baixa)
-    deadline_hours: '', // Horas para conclusão
-    descricao: '' // Descrição detalhada do SLA
+    status: '', // Nome amigável do SLA
+    cor: '#ffffff', // Cor do texto
+    background: '#334155' // Cor de fundo (bg-slate-700 padrão)
   });
 
   // Busca os dados ao carregar o componente
@@ -37,16 +36,21 @@ export function SlaManager() { // Componente Organism para gerenciar SLAs
   // Função para buscar SLAs do Supabase
   const fetchSlas = async () => {
     setLoading(true);
+    console.log("[SLA DEBUG] Iniciando busca de SLAs...");
     try {
       const { data, error } = await supabase
         .from('sla')
-        .select('*')
-        .order('deadline_hours', { ascending: true }); // Ordena por tempo de resposta
+        .select('*');
 
-      if (error) throw error;
-      if (data) setSlas(data);
+      if (error) {
+        console.error("[SLA DEBUG] Erro na requisição:", error);
+        throw error;
+      }
+
+      console.log("[SLA DEBUG] Dados recebidos:", data);
+      setSlas(data || []);
     } catch (error) {
-      console.error('Erro ao buscar SLAs:', error);
+      console.error('[SLA DEBUG] Catch error:', error);
       toast.error('Falha ao carregar as configurações de SLA.');
     } finally {
       setLoading(false);
@@ -58,14 +62,13 @@ export function SlaManager() { // Componente Organism para gerenciar SLAs
     if (sla) {
       setEditingSla(sla);
       setFormData({
-        nome: sla.nome,
-        status: sla.status,
-        deadline_hours: String(sla.deadline_hours),
-        descricao: sla.descricao || ''
+        status: sla.status || '',
+        cor: sla.cor || '#ffffff',
+        background: sla.background || '#334155'
       });
     } else {
       setEditingSla(null);
-      setFormData({ nome: '', status: '', deadline_hours: '', descricao: '' });
+      setFormData({ status: '', cor: '#ffffff', background: '#334155' });
     }
     setIsModalOpen(true);
   };
@@ -76,10 +79,9 @@ export function SlaManager() { // Componente Organism para gerenciar SLAs
     setIsSaving(true);
 
     const payload = {
-      nome: formData.nome,
       status: formData.status,
-      deadline_hours: Number(formData.deadline_hours),
-      descricao: formData.descricao
+      cor: formData.cor,
+      background: formData.background
     };
 
     try {
@@ -128,8 +130,7 @@ export function SlaManager() { // Componente Organism para gerenciar SLAs
 
   // Filtro de pesquisa local
   const filteredSlas = slas.filter(s =>
-    s.status.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (s.descricao && s.descricao.toLowerCase().includes(searchTerm.toLowerCase()))
+    (s.status || '').toLowerCase().includes((searchTerm || '').toLowerCase())
   );
 
   return (
@@ -188,8 +189,6 @@ export function SlaManager() { // Componente Organism para gerenciar SLAs
               <thead className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur-sm border-b border-slate-800">
                 <tr className="text-slate-400 text-[10px] uppercase font-bold tracking-widest">
                   <th className="px-6 py-4">Status / Prioridade</th>
-                  <th className="px-6 py-4">Tempo (Horas)</th>
-                  <th className="px-6 py-4">Descrição</th>
                   <th className="px-6 py-4 text-right">Ações</th>
                 </tr>
               </thead>
@@ -198,26 +197,14 @@ export function SlaManager() { // Componente Organism para gerenciar SLAs
                   <tr key={sla.id} className="hover:bg-slate-800/30 transition-colors group">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className={`w-2 h-2 rounded-full ${sla.status.toLowerCase().includes('alta') || sla.status.toLowerCase().includes('crítica') ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' :
-                          sla.status.toLowerCase().includes('média') ? 'bg-yellow-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]' :
-                            'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]'
-                          }`} />
+                        <div
+                          className="w-2 h-2 rounded-full shadow-[0_0_8px_rgba(255,255,255,0.2)]"
+                          style={{ backgroundColor: sla.cor || '#ffffff' }}
+                        />
                         <div className="flex flex-col">
-                          <span className="text-slate-200 font-semibold">{sla.nome}</span>
-                          <span className="text-[10px] text-slate-500 uppercase tracking-wider">{sla.status}</span>
+                          <span className="text-slate-200 font-semibold">{sla.nome || sla.status || 'SLA sem nome'}</span>
                         </div>
                       </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2 text-slate-300 font-mono text-sm">
-                        <Clock className="w-3.5 h-3.5 text-slate-500" />
-                        {sla.deadline_hours}h
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-slate-500 text-xs max-w-xs truncate" title={sla.descricao || ''}>
-                        {sla.descricao || 'Sem descrição detalhada'}
-                      </p>
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex justify-end gap-2">
@@ -264,19 +251,7 @@ export function SlaManager() { // Componente Organism para gerenciar SLAs
 
             <form onSubmit={handleSave} className="p-6 space-y-5">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Nome do SLA</label>
-                <input
-                  type="text"
-                  required
-                  value={formData.nome}
-                  onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                  placeholder="Ex: Suporte Padrão, Atendimento VIP..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 transition-all"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Prioridade</label>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Status</label>
                 <input
                   type="text"
                   required
@@ -287,28 +262,57 @@ export function SlaManager() { // Componente Organism para gerenciar SLAs
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Prazo (Horas Úteis)</label>
-                <input
-                  type="number"
-                  required
-                  min="1"
-                  value={formData.deadline_hours}
-                  onChange={(e) => setFormData({ ...formData, deadline_hours: e.target.value })}
-                  placeholder="Ex: 24"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 transition-all"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Cor do Texto</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="color"
+                      value={formData.cor}
+                      onChange={(e) => setFormData({ ...formData, cor: e.target.value })}
+                      className="w-10 h-10 bg-slate-950 border border-slate-800 rounded-lg overflow-hidden cursor-pointer p-0"
+                    />
+                    <input
+                      type="text"
+                      value={formData.cor}
+                      onChange={(e) => setFormData({ ...formData, cor: e.target.value })}
+                      className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 transition-all font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Cor de Fundo</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="color"
+                      value={formData.background}
+                      onChange={(e) => setFormData({ ...formData, background: e.target.value })}
+                      className="w-10 h-10 bg-slate-950 border border-slate-800 rounded-lg overflow-hidden cursor-pointer p-0"
+                    />
+                    <input
+                      type="text"
+                      value={formData.background}
+                      onChange={(e) => setFormData({ ...formData, background: e.target.value })}
+                      className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 transition-all font-mono"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Descrição</label>
-                <textarea
-                  rows={3}
-                  value={formData.descricao}
-                  onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
-                  placeholder="Explique os critérios para este nível de serviço..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 transition-all resize-none"
-                />
+              {/* Preview */}
+              <div className="p-4 bg-slate-950/50 rounded-xl border border-slate-800/50 flex flex-col items-center gap-2">
+                <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Preview da Tag</span>
+                <span
+                  className="px-3 py-1 rounded text-[10px] font-bold uppercase border"
+                  style={{
+                    color: formData.cor,
+                    backgroundColor: formData.background,
+                    borderColor: `${formData.cor}33`
+                  }}
+                >
+                  {formData.status || 'Status do SLA'}
+                </span>
               </div>
 
               <div className="flex gap-3 pt-4">

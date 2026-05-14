@@ -42,7 +42,8 @@ export interface SLA {
   id: number;
   nome: string;
   status: string;
-  deadline_hours: number;
   descricao: string | null;
+  cor: string;
+  background: string;
   created_at?: string;
-}
+}
